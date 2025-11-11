@@ -4,11 +4,26 @@ import { CrowdfundingState } from '../src/types'
 
 const DATA_FILE = join(process.cwd(), 'crowdfunding-data.json')
 
-export function loadCrowdfundingData(): CrowdfundingState {
+interface StoredData {
+  walletIdentity: string
+  crowdfunding: CrowdfundingState
+}
+
+export function loadCrowdfundingData(walletIdentity: string): CrowdfundingState {
   if (existsSync(DATA_FILE)) {
     try {
       const data = readFileSync(DATA_FILE, 'utf-8')
-      return JSON.parse(data)
+      const stored: StoredData = JSON.parse(data)
+
+      // Check if wallet matches
+      if (stored.walletIdentity === walletIdentity) {
+        console.log('Loaded existing crowdfunding data for current wallet')
+        return stored.crowdfunding
+      } else {
+        console.log('Wallet changed - starting fresh crowdfunding')
+        console.log(`Old wallet: ${stored.walletIdentity}`)
+        console.log(`New wallet: ${walletIdentity}`)
+      }
     } catch (error) {
       console.error('Error loading crowdfunding data:', error)
     }
@@ -23,9 +38,13 @@ export function loadCrowdfundingData(): CrowdfundingState {
   }
 }
 
-export function saveCrowdfundingData(state: CrowdfundingState): void {
+export function saveCrowdfundingData(walletIdentity: string, state: CrowdfundingState): void {
   try {
-    writeFileSync(DATA_FILE, JSON.stringify(state, null, 2), 'utf-8')
+    const stored: StoredData = {
+      walletIdentity,
+      crowdfunding: state
+    }
+    writeFileSync(DATA_FILE, JSON.stringify(stored, null, 2), 'utf-8')
   } catch (error) {
     console.error('Error saving crowdfunding data:', error)
   }

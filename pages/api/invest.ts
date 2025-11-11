@@ -99,8 +99,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     crowdfunding.raised += actualAmount
     console.log(`Total investors: ${crowdfunding.investors.length}, Total raised: ${crowdfunding.raised} sats`)
 
-    // Save to disk
-    saveCrowdfundingData(crowdfunding)
+    // Get wallet identity and save to disk
+    const identityKey = await wallet.getPublicKey({ identityKey: true })
+    saveCrowdfundingData(identityKey.publicKey, crowdfunding)
 
     // Get updated wallet balance from UTXOs
     let actualBalance = 0

@@ -40,7 +40,10 @@ async function create() {
       satoshis: AMOUNT,
       outputDescription: 'Fund backend wallet'
     }],
-    description: 'Funding backend wallet'
+    description: 'Funding backend wallet',
+    options: {
+      randomizeOutputs: false
+    }
   })
   console.log({ transaction })
   if (!transaction.tx) throw new Error('No transaction created')

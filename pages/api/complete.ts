@@ -78,8 +78,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     crowdfunding.isComplete = true
 
-    // Save final state
-    saveCrowdfundingData(crowdfunding)
+    // Get wallet identity and save final state
+    const identityKey = await wallet.getPublicKey({ identityKey: true })
+    saveCrowdfundingData(identityKey.publicKey, crowdfunding)
 
     res.status(200).json({
       success: true,

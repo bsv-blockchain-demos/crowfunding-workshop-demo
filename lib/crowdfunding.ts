@@ -1,7 +1,13 @@
 import { CrowdfundingState } from '../src/types'
-import { loadCrowdfundingData } from './storage'
 
-// Load persisted crowdfunding state
-export const crowdfunding: CrowdfundingState = loadCrowdfundingData()
+// Crowdfunding state - will be initialized when wallet loads
+export let crowdfunding: CrowdfundingState = {
+  goal: 100,
+  raised: 0,
+  investors: [],
+  isComplete: false
+}
 
-console.log('Loaded crowdfunding state:', crowdfunding)
+export function setCrowdfundingState(state: CrowdfundingState) {
+  crowdfunding = state
+}
