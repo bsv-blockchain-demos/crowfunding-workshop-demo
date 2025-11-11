@@ -1,6 +1,5 @@
 import express, { Request, Response } from 'express'
-import { createAuthMiddleware } from '@bsv/auth-express-middleware'
-import { createPaymentMiddleware } from './paymentMiddleware.js'
+import { Utils, AtomicBEEF, Transaction } from '@bsv/sdk'
 import { createInvestorToken } from './pushdrop.js'
 import { CrowdfundingState, Investor } from './types.js'
 import { initializeBackendWallet } from './wallet.js'
@@ -28,7 +27,7 @@ app.use((req, res, next) => {
 
 // Crowdfunding state (in-memory for demo)
 const crowdfunding: CrowdfundingState = {
-  goal: 100000, // 100k satoshis goal
+  goal: 100, // 100k satoshis goal
   raised: 0,
   investors: [],
   isComplete: false
@@ -38,14 +37,16 @@ async function startServer() {
   // Initialize backend wallet
   const wallet = await initializeBackendWallet()
 
-  // Auth middleware
-  const authMiddleware = createAuthMiddleware({
-    allowUnauthenticated: false,
-    wallet
+  // Get backend wallet identity for payments
+  app.get('/wallet-info', async (_req: Request, res: Response) => {
+    const identityKey = await wallet.getPublicKey({ identityKey: true })
+    res.json({
+      identityKey: identityKey.publicKey
+    })
   })
 
   // Public endpoint - get crowdfunding status
-  app.get('/status', (req: Request, res: Response) => {
+  app.get('/status', (_req: Request, res: Response) => {
     res.json({
       goal: crowdfunding.goal,
       raised: crowdfunding.raised,
@@ -55,50 +56,84 @@ async function startServer() {
     })
   })
 
-  // Protected endpoint - invest in crowdfunding
+  // Invest endpoint - accepts payment transaction
   app.post('/invest',
-    authMiddleware,
-    createPaymentMiddleware({
-      wallet,
-      calculateRequestPrice: async (req: Request) => {
-        return req.body.amount || 1000 // Minimum 1000 satoshis
-      }
-    }),
     async (req: Request, res: Response) => {
-      const amount = req.payment?.satoshisPaid || 0
-      const investorKey = req.auth?.identityKey
+      const { transaction, investorKey, derivationPrefix, derivationSuffix } = req.body
 
-      if (!investorKey) {
-        return res.status(400).json({ error: 'No identity key found' })
+      if (!transaction || !investorKey || !derivationPrefix || !derivationSuffix) {
+        return res.status(400).json({ error: 'Missing required payment data' })
       }
 
       if (crowdfunding.isComplete) {
         return res.status(400).json({ error: 'Crowdfunding already complete' })
       }
 
-      // Record the investment
-      const investor: Investor = {
-        identityKey: investorKey,
-        amount,
-        timestamp: Date.now()
+      try {
+        // Parse transaction to get actual amount
+        const tx = Utils.toArray(transaction, 'base64') as AtomicBEEF
+        const parsedTx = Transaction.fromBEEF(tx)
+
+        // Get the actual satoshi amount from the first output
+        const actualAmount = parsedTx.outputs[0].satoshis || 0
+
+        if (actualAmount === 0) {
+          return res.status(400).json({ error: 'Invalid transaction amount' })
+        }
+
+        // Internalize the payment
+        const result = await wallet.internalizeAction({
+          tx,
+          outputs: [{
+            outputIndex: 0,
+            protocol: 'wallet payment',
+            paymentRemittance: {
+              derivationPrefix,
+              derivationSuffix,
+              senderIdentityKey: investorKey
+            }
+          }],
+          description: 'Crowdfunding investment'
+        })
+
+        if (!result.accepted) {
+          return res.status(400).json({ error: 'Payment not accepted' })
+        }
+
+        // Check if investor already exists, update amount if so
+        const existingInvestor = crowdfunding.investors.find(inv => inv.identityKey === investorKey)
+
+        if (existingInvestor) {
+          existingInvestor.amount += actualAmount
+          existingInvestor.timestamp = Date.now()
+        } else {
+          // Record new investment
+          const investor: Investor = {
+            identityKey: investorKey,
+            amount: actualAmount,
+            timestamp: Date.now()
+          }
+          crowdfunding.investors.push(investor)
+        }
+
+        crowdfunding.raised += actualAmount
+
+        res.json({
+          success: true,
+          amount: actualAmount,
+          totalRaised: crowdfunding.raised,
+          message: 'Investment received! Tokens will be distributed when goal is reached.'
+        })
+      } catch (error: any) {
+        console.error('Investment error:', error)
+        res.status(400).json({ error: error.message || 'Payment failed' })
       }
-
-      crowdfunding.investors.push(investor)
-      crowdfunding.raised += amount
-
-      res.json({
-        success: true,
-        amount,
-        totalRaised: crowdfunding.raised,
-        message: 'Investment recorded! Tokens will be distributed when goal is reached.'
-      })
     }
   )
 
-  // Protected endpoint - complete crowdfunding and distribute tokens
+  // Complete crowdfunding and distribute tokens
   app.post('/complete',
-    authMiddleware,
-    async (req: Request, res: Response) => {
+    async (_req: Request, res: Response) => {
       if (crowdfunding.isComplete) {
         return res.status(400).json({ error: 'Already completed' })
       }

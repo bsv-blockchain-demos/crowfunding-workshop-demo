@@ -185,7 +185,7 @@
 <body>
   <div class="container">
     <h1>BSV Crowdfunding Demo</h1>
-    <p class="subtitle">Workshop Demo - Connect wallet, invest, and receive PushDrop tokens</p>
+    <p class="subtitle">Workshop Demo - Pay with BSV Wallet and receive PushDrop tokens when goal is reached</p>
 
     <div class="status-card">
       <div class="stat">
@@ -213,24 +213,43 @@
 
     <div class="input-group">
       <label for="amount">Investment Amount (satoshis)</label>
-      <input type="number" id="amount" placeholder="Enter amount (min 1000)" min="1000" value="1000">
+      <input type="number" id="amount" placeholder="Enter amount" min="1" value="1000">
     </div>
 
-    <button class="btn btn-primary" id="investBtn">
+    <button class="btn btn-primary" id="investBtn" onclick="invest()">
       Invest with BSV Wallet
     </button>
 
-    <button class="btn btn-success" id="completeBtn" style="display: none;">
+    <button class="btn btn-success" id="completeBtn" onclick="complete()" style="display: none;">
       Complete & Distribute Tokens
     </button>
 
     <div class="message" id="message"></div>
   </div>
 
-  <script type="module">
-    import { AuthFetch } from 'https://esm.sh/@bsv/sdk@1.8.11'
+  <script src="https://unpkg.com/@bsv/sdk@1.8.11/dist/umd/bsv-sdk.min.js"></script>
+  <script>
+    const { WalletClient, P2PKH, PublicKey, Utils } = window.bsvSdk
+    const brc29ProtocolID = [2, '3241645161d8']
+    let wallet = null
+    let backendIdentityKey = null
 
-    const authClient = new AuthFetch()
+    async function initWallet() {
+      try {
+        wallet = new WalletClient('json-api', 'localhost')
+        await wallet.connectToSubstrate()
+
+        // Get backend wallet info
+        const response = await fetch('/wallet-info')
+        const data = await response.json()
+        backendIdentityKey = data.identityKey
+
+        console.log('Wallet connected')
+      } catch (error) {
+        console.error('Wallet connection error:', error)
+        showMessage('Please make sure BSV Desktop Wallet is running', 'error')
+      }
+    }
 
     async function loadStatus() {
       const response = await fetch('/status')
@@ -251,34 +270,82 @@
       }
     }
 
-    async function invest() {
+    window.invest = async function() {
       const amount = parseInt(document.getElementById('amount').value)
       const btn = document.getElementById('investBtn')
 
-      if (amount < 1000) {
-        showMessage('Minimum investment is 1000 satoshis', 'error')
+      if (amount < 1) {
+        showMessage('Please enter a valid amount', 'error')
         return
       }
 
+      if (!wallet) {
+        await initWallet()
+        if (!wallet) return
+      }
+
       btn.disabled = true
-      btn.textContent = 'Processing...'
+      btn.textContent = 'Creating payment...'
 
       try {
-        const response = await authClient.fetch('http://localhost:3000/invest', {
+        // Generate derivation keys
+        const derivationPrefix = Utils.toBase64(Utils.toArray('crowdfunding', 'utf8'))
+        const derivationSuffix = Utils.toBase64(Utils.toArray(Date.now().toString(), 'utf8'))
+
+        // Get investor's identity key
+        const { publicKey: investorKey } = await wallet.getPublicKey({ identityKey: true })
+
+        // Get derived public key for payment to backend
+        const { publicKey: derivedPublicKey } = await wallet.getPublicKey({
+          counterparty: backendIdentityKey,
+          protocolID: brc29ProtocolID,
+          keyID: `${derivationPrefix} ${derivationSuffix}`
+        })
+
+        // Create locking script
+        const lockingScript = new P2PKH().lock(PublicKey.fromString(derivedPublicKey).toAddress()).toHex()
+
+        btn.textContent = 'Confirm in wallet...'
+
+        // Create transaction
+        const result = await wallet.createAction({
+          outputs: [{
+            lockingScript,
+            satoshis: amount,
+            outputDescription: 'Crowdfunding investment'
+          }],
+          description: 'Investment in crowdfunding'
+        })
+
+        if (!result.tx) {
+          throw new Error('Transaction creation failed')
+        }
+
+        btn.textContent = 'Sending...'
+
+        // Send to backend
+        const response = await fetch('/invest', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ amount })
+          body: JSON.stringify({
+            transaction: Utils.toBase64(result.tx),
+            amount,
+            investorKey,
+            derivationPrefix,
+            derivationSuffix
+          })
         })
 
         const data = await response.json()
 
         if (response.ok) {
-          showMessage(`Investment successful! ${data.amount} sats recorded.`, 'success')
+          showMessage(`Investment successful! ${data.amount} sats sent.`, 'success')
           await loadStatus()
         } else {
           showMessage(data.error || 'Investment failed', 'error')
         }
       } catch (error) {
+        console.error('Investment error:', error)
         showMessage('Error: ' + error.message, 'error')
       } finally {
         btn.disabled = false
@@ -286,13 +353,13 @@
       }
     }
 
-    async function complete() {
+    window.complete = async function() {
       const btn = document.getElementById('completeBtn')
       btn.disabled = true
       btn.textContent = 'Distributing tokens...'
 
       try {
-        const response = await authClient.fetch('http://localhost:3000/complete', {
+        const response = await fetch('/complete', {
           method: 'POST'
         })
 
@@ -320,11 +387,8 @@
       setTimeout(() => msg.classList.remove('show'), 5000)
     }
 
-    // Setup event listeners
-    document.getElementById('investBtn').addEventListener('click', invest)
-    document.getElementById('completeBtn').addEventListener('click', complete)
-
-    // Load status on page load
+    // Initialize on page load
+    initWallet()
     loadStatus()
     setInterval(loadStatus, 5000) // Refresh every 5 seconds
   </script>
