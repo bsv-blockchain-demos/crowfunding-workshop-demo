@@ -33,6 +33,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Invalid transaction amount' })
     }
 
+    console.log('Internalizing payment:', {
+      amount: actualAmount,
+      investorKey,
+      derivationPrefix,
+      derivationSuffix
+    })
+
+    // Let's check what key the backend expects
+    try {
+      const backendKey = await wallet.getPublicKey({
+        protocolID: [2, '3241645161d8'],
+        keyID: `${derivationPrefix} ${derivationSuffix}`,
+        counterparty: investorKey,
+        forSelf: true
+      })
+      console.log('Backend expects this key:', backendKey.publicKey)
+
+      // Check what's in the transaction
+      console.log('Transaction output script:', parsedTx.outputs[0].lockingScript.toHex())
+    } catch (e) {
+      console.log('Error deriving backend key:', e)
+    }
+
     // Internalize the payment
     const result = await wallet.internalizeAction({
       tx,
@@ -47,6 +70,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }],
       description: 'Crowdfunding investment'
     })
+
+    console.log('Internalization result:', result)
 
     if (!result.accepted) {
       return res.status(400).json({ error: 'Payment not accepted' })

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { WalletClient, P2PKH, PublicKey, Utils } from '@bsv/sdk'
+import { WalletClient, P2PKH, PublicKey, Utils, WalletProtocol } from '@bsv/sdk'
 import styles from '../styles/Home.module.css'
 
-const brc29ProtocolID: [number, string] = [2, '3241645161d8']
+const brc29ProtocolID: WalletProtocol = [2, '3241645161d8']
 
 export default function Home() {
   const [wallet, setWallet] = useState<WalletClient | null>(null)
@@ -56,15 +56,24 @@ export default function Home() {
     setLoading(true)
 
     try {
+      // Use consistent derivation like setupWallet
       const derivationPrefix = Utils.toBase64(Utils.toArray('crowdfunding', 'utf8'))
-      const derivationSuffix = Utils.toBase64(Utils.toArray(Date.now().toString(), 'utf8'))
+      const derivationSuffix = Utils.toBase64(Utils.toArray('investment' + Date.now(), 'utf8'))
 
       const { publicKey: investorKey } = await wallet.getPublicKey({ identityKey: true })
+
+      console.log('Creating payment:', {
+        investorKey,
+        backendIdentityKey,
+        derivationPrefix,
+        derivationSuffix
+      })
 
       const { publicKey: derivedPublicKey } = await wallet.getPublicKey({
         counterparty: backendIdentityKey,
         protocolID: brc29ProtocolID,
-        keyID: `${derivationPrefix} ${derivationSuffix}`
+        keyID: `${derivationPrefix} ${derivationSuffix}`,
+        forSelf: false
       })
 
       const lockingScript = new P2PKH().lock(PublicKey.fromString(derivedPublicKey).toAddress()).toHex()
@@ -77,6 +86,8 @@ export default function Home() {
         }],
         description: 'Investment in crowdfunding'
       })
+
+      console.log('Transaction created:', result.txid)
 
       if (!result.tx) {
         throw new Error('Transaction creation failed')
