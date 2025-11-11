@@ -50,13 +50,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log(`Created ${outputs.length} PushDrop token outputs`)
 
-    // Create and broadcast the transaction
-    const result = await wallet.createAction({
-      description: 'Distribute crowdfunding tokens to investors',
-      outputs
-    })
+    if (outputs.length === 0) {
+      return res.status(400).json({ error: 'No outputs to create' })
+    }
 
-    console.log(`Tokens distributed! TXID: ${result.txid}`)
+    // Create and broadcast the transaction
+    console.log('Creating transaction with outputs:', outputs.map(o => ({ desc: o.outputDescription, sats: o.satoshis })))
+
+    let result: any
+    try {
+      result = await Promise.race([
+        wallet.createAction({
+          description: 'Distribute crowdfunding tokens to investors',
+          outputs
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Transaction creation timeout')), 30000)
+        )
+      ]) as any
+
+      console.log('Transaction result:', result)
+      console.log(`Tokens distributed! TXID: ${result.txid}`)
+    } catch (createError: any) {
+      console.error('createAction error:', createError)
+      throw new Error(`Failed to create transaction: ${createError.message}`)
+    }
 
     crowdfunding.isComplete = true
 
@@ -66,7 +84,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(200).json({
       success: true,
       message: 'Tokens distributed to all investors!',
-      txid: result.txid,
+      txid: result?.txid || 'unknown',
       investorCount: crowdfunding.investors.length
     })
   } catch (error: any) {
