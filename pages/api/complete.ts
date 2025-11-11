@@ -24,10 +24,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const wallet = await initializeBackendWallet()
 
+    console.log('Distributing tokens to investors:', crowdfunding.investors)
+
     // Create transaction with PushDrop tokens for each investor
     const outputs = []
 
     for (const investor of crowdfunding.investors) {
+      console.log(`Creating token for investor: ${investor.identityKey.slice(0, 16)}... Amount: ${investor.amount} sats`)
+
       const lockingScript = await createInvestorToken(
         wallet,
         {
@@ -38,17 +42,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       )
 
       outputs.push({
-        outputDescription: `Token for investor ${investor.identityKey.slice(0, 10)}...`,
+        outputDescription: `Token for investor ${investor.identityKey.slice(0, 10)}... - ${investor.amount} sats`,
         satoshis: 1,
         lockingScript: lockingScript.toHex()
       })
     }
+
+    console.log(`Created ${outputs.length} PushDrop token outputs`)
 
     // Create and broadcast the transaction
     const result = await wallet.createAction({
       description: 'Distribute crowdfunding tokens to investors',
       outputs
     })
+
+    console.log(`Tokens distributed! TXID: ${result.txid}`)
 
     crowdfunding.isComplete = true
 

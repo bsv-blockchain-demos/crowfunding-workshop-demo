@@ -84,6 +84,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (existingInvestor) {
       existingInvestor.amount += actualAmount
       existingInvestor.timestamp = Date.now()
+      console.log(`Updated existing investor: ${investorKey.slice(0, 16)}... New total: ${existingInvestor.amount} sats`)
     } else {
       // Record new investment
       const investor: Investor = {
@@ -92,9 +93,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         timestamp: Date.now()
       }
       crowdfunding.investors.push(investor)
+      console.log(`New investor added: ${investorKey.slice(0, 16)}... Amount: ${actualAmount} sats`)
     }
 
     crowdfunding.raised += actualAmount
+    console.log(`Total investors: ${crowdfunding.investors.length}, Total raised: ${crowdfunding.raised} sats`)
 
     // Save to disk
     saveCrowdfundingData(crowdfunding)
