@@ -1,5 +1,9 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
+/brc-100-payments-master
+/payment-express-middleware-master
+/BackendWallet
+/PushDrop
+.claude/
 # dependencies
 /node_modules
 /.pnp
@@ -14,6 +18,7 @@
 
 # production
 /build
+/dist
 
 # misc
 .DS_Store

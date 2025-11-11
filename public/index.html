@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BSV Crowdfunding Demo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 600px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 32px;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .status-card {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 30px;
+    }
+
+    .stat {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 16px;
+    }
+
+    .stat-label {
+      color: #666;
+    }
+
+    .stat-value {
+      color: #333;
+      font-weight: 600;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 30px;
+      background: #e0e0e0;
+      border-radius: 15px;
+      overflow: hidden;
+      margin: 20px 0;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      transition: width 0.5s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .input-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #333;
+      font-weight: 500;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 16px;
+      transition: border-color 0.3s;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, opacity 0.2s;
+      margin-bottom: 10px;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-success {
+      background: #10b981;
+      color: white;
+    }
+
+    .message {
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 20px;
+      display: none;
+    }
+
+    .message.success {
+      background: #d1fae5;
+      color: #065f46;
+      border: 1px solid #10b981;
+    }
+
+    .message.error {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #ef4444;
+    }
+
+    .message.show {
+      display: block;
+    }
+
+    .complete-badge {
+      display: inline-block;
+      background: #10b981;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-left: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>BSV Crowdfunding Demo</h1>
+    <p class="subtitle">Workshop Demo - Connect wallet, invest, and receive PushDrop tokens</p>
+
+    <div class="status-card">
+      <div class="stat">
+        <span class="stat-label">Goal:</span>
+        <span class="stat-value" id="goal">Loading...</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Raised:</span>
+        <span class="stat-value" id="raised">Loading...</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Investors:</span>
+        <span class="stat-value" id="investors">Loading...</span>
+      </div>
+
+      <div class="progress-bar">
+        <div class="progress-fill" id="progress">0%</div>
+      </div>
+
+      <div class="stat">
+        <span class="stat-label">Status:</span>
+        <span class="stat-value" id="status">Active</span>
+      </div>
+    </div>
+
+    <div class="input-group">
+      <label for="amount">Investment Amount (satoshis)</label>
+      <input type="number" id="amount" placeholder="Enter amount (min 1000)" min="1000" value="1000">
+    </div>
+
+    <button class="btn btn-primary" id="investBtn">
+      Invest with BSV Wallet
+    </button>
+
+    <button class="btn btn-success" id="completeBtn" style="display: none;">
+      Complete & Distribute Tokens
+    </button>
+
+    <div class="message" id="message"></div>
+  </div>
+
+  <script type="module">
+    import { AuthFetch } from 'https://esm.sh/@bsv/sdk@1.8.11'
+
+    const authClient = new AuthFetch()
+
+    async function loadStatus() {
+      const response = await fetch('/status')
+      const data = await response.json()
+
+      document.getElementById('goal').textContent = data.goal + ' sats'
+      document.getElementById('raised').textContent = data.raised + ' sats'
+      document.getElementById('investors').textContent = data.investorCount
+      document.getElementById('progress').style.width = data.percentFunded + '%'
+      document.getElementById('progress').textContent = data.percentFunded + '%'
+
+      if (data.isComplete) {
+        document.getElementById('status').innerHTML = 'Complete <span class="complete-badge">FUNDED</span>'
+        document.getElementById('investBtn').disabled = true
+        document.getElementById('completeBtn').style.display = 'none'
+      } else if (data.raised >= data.goal) {
+        document.getElementById('completeBtn').style.display = 'block'
+      }
+    }
+
+    async function invest() {
+      const amount = parseInt(document.getElementById('amount').value)
+      const btn = document.getElementById('investBtn')
+
+      if (amount < 1000) {
+        showMessage('Minimum investment is 1000 satoshis', 'error')
+        return
+      }
+
+      btn.disabled = true
+      btn.textContent = 'Processing...'
+
+      try {
+        const response = await authClient.fetch('http://localhost:3000/invest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount })
+        })
+
+        const data = await response.json()
+
+        if (response.ok) {
+          showMessage(`Investment successful! ${data.amount} sats recorded.`, 'success')
+          await loadStatus()
+        } else {
+          showMessage(data.error || 'Investment failed', 'error')
+        }
+      } catch (error) {
+        showMessage('Error: ' + error.message, 'error')
+      } finally {
+        btn.disabled = false
+        btn.textContent = 'Invest with BSV Wallet'
+      }
+    }
+
+    async function complete() {
+      const btn = document.getElementById('completeBtn')
+      btn.disabled = true
+      btn.textContent = 'Distributing tokens...'
+
+      try {
+        const response = await authClient.fetch('http://localhost:3000/complete', {
+          method: 'POST'
+        })
+
+        const data = await response.json()
+
+        if (response.ok) {
+          showMessage(`Success! Tokens distributed to ${data.investorCount} investors. TX: ${data.txid}`, 'success')
+          await loadStatus()
+        } else {
+          showMessage(data.error || 'Failed to complete', 'error')
+          btn.disabled = false
+          btn.textContent = 'Complete & Distribute Tokens'
+        }
+      } catch (error) {
+        showMessage('Error: ' + error.message, 'error')
+        btn.disabled = false
+        btn.textContent = 'Complete & Distribute Tokens'
+      }
+    }
+
+    function showMessage(text, type) {
+      const msg = document.getElementById('message')
+      msg.textContent = text
+      msg.className = 'message show ' + type
+      setTimeout(() => msg.classList.remove('show'), 5000)
+    }
+
+    // Setup event listeners
+    document.getElementById('investBtn').addEventListener('click', invest)
+    document.getElementById('completeBtn').addEventListener('click', complete)
+
+    // Load status on page load
+    loadStatus()
+    setInterval(loadStatus, 5000) // Refresh every 5 seconds
+  </script>
+</body>
+</html>
