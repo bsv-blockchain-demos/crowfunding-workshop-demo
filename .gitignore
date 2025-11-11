@@ -4,6 +4,7 @@
 /BackendWallet
 /PushDrop
 .claude/
+crowdfunding-data.json
 # dependencies
 /node_modules
 /.pnp
@@ -15,6 +16,7 @@
 # next.js
 /.next/
 /out/
+.next
 
 # production
 /build

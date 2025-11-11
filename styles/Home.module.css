@@ -152,3 +152,36 @@
   color: #991b1b;
   border: 1px solid #ef4444;
 }
+
+.investorList {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.investorList h3 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 18px;
+}
+
+.investorItem {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px;
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.investorKey {
+  color: #666;
+  font-family: monospace;
+}
+
+.investorAmount {
+  color: #333;
+  font-weight: 600;
+}

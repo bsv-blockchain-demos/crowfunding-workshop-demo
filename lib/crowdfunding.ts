@@ -1,9 +1,7 @@
 import { CrowdfundingState } from '../src/types'
+import { loadCrowdfundingData } from './storage'
 
-// In-memory crowdfunding state (for demo)
-export const crowdfunding: CrowdfundingState = {
-  goal: 100,
-  raised: 0,
-  investors: [],
-  isComplete: false
-}
+// Load persisted crowdfunding state
+export const crowdfunding: CrowdfundingState = loadCrowdfundingData()
+
+console.log('Loaded crowdfunding state:', crowdfunding)

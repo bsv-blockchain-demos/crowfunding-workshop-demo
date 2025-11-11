@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import { initializeBackendWallet } from '../../src/wallet'
 import { createInvestorToken } from '../../src/pushdrop'
 import { crowdfunding } from '../../lib/crowdfunding'
+import { saveCrowdfundingData } from '../../lib/storage'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -50,6 +51,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
 
     crowdfunding.isComplete = true
+
+    // Save final state
+    saveCrowdfundingData(crowdfunding)
 
     res.status(200).json({
       success: true,

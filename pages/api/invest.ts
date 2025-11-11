@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import { Utils, AtomicBEEF, Transaction } from '@bsv/sdk'
 import { initializeBackendWallet } from '../../src/wallet'
 import { crowdfunding } from '../../lib/crowdfunding'
+import { saveCrowdfundingData } from '../../lib/storage'
 import { Investor } from '../../src/types'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -95,10 +96,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     crowdfunding.raised += actualAmount
 
+    // Save to disk
+    saveCrowdfundingData(crowdfunding)
+
+    // Get updated wallet balance from UTXOs
+    let actualBalance = 0
+    try {
+      const result = await wallet.listOutputs({
+        basket: 'default',
+        includeEnvelope: false
+      })
+      const utxos = Array.isArray(result) ? result : (result.outputs || [])
+      actualBalance = utxos.reduce((sum: number, utxo: any) => sum + (utxo.satoshis || 0), 0)
+    } catch (e) {
+      console.error('Could not get balance:', e)
+    }
+
+    console.log('Investment recorded:', {
+      amount: actualAmount,
+      totalRaised: crowdfunding.raised,
+      actualWalletBalance: actualBalance
+    })
+
     res.status(200).json({
       success: true,
       amount: actualAmount,
       totalRaised: crowdfunding.raised,
+      actualBalance,
       message: 'Investment received! Tokens will be distributed when goal is reached.'
     })
   } catch (error: any) {

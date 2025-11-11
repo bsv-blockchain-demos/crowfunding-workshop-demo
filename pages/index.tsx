@@ -164,8 +164,12 @@ export default function Home() {
             <span>{status.goal} sats</span>
           </div>
           <div className={styles.stat}>
-            <span>Raised:</span>
+            <span>Raised (Tracked):</span>
             <span>{status.raised} sats</span>
+          </div>
+          <div className={styles.stat}>
+            <span>Wallet Balance:</span>
+            <span>{status.actualBalance} sats</span>
           </div>
           <div className={styles.stat}>
             <span>Investors:</span>
@@ -183,6 +187,18 @@ export default function Home() {
             <span>{status.isComplete ? '✅ FUNDED' : 'Active'}</span>
           </div>
         </div>
+
+        {status.investors && status.investors.length > 0 && (
+          <div className={styles.investorList}>
+            <h3>Investors</h3>
+            {status.investors.map((inv: any, idx: number) => (
+              <div key={idx} className={styles.investorItem}>
+                <span className={styles.investorKey}>{inv.identityKey}</span>
+                <span className={styles.investorAmount}>{inv.amount} sats</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className={styles.inputGroup}>
           <label htmlFor="amount">Investment Amount (satoshis)</label>
