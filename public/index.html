@@ -30,6 +30,61 @@
       box-shadow: 0 20px 60px rgba(0,0,0,0.3);
     }
 
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 20px;
+      gap: 20px;
+    }
+
+    .wallet-status {
+      flex-shrink: 0;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: all 0.3s ease;
+    }
+
+    .status-icon {
+      font-size: 16px;
+      font-weight: bold;
+    }
+
+    .status-badge.connected {
+      background: #d1fae5;
+      color: #065f46;
+      border: 2px solid #10b981;
+    }
+
+    .status-badge.disconnected {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 2px solid #ef4444;
+    }
+
+    .status-badge.clickable {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .status-badge.clickable:hover {
+      opacity: 0.8;
+      transform: translateY(-1px);
+    }
+
+    .status-badge.clickable:active {
+      transform: translateY(0);
+    }
+
     h1 {
       color: #333;
       margin-bottom: 10px;
@@ -38,7 +93,7 @@
 
     .subtitle {
       color: #666;
-      margin-bottom: 30px;
+      margin-bottom: 10px;
       font-size: 14px;
     }
 
@@ -184,45 +239,57 @@
 </head>
 <body>
   <div class="container">
-    <h1>BSV Crowdfunding Demo</h1>
-    <p class="subtitle">Workshop Demo - Pay with BSV Wallet and receive PushDrop tokens when goal is reached</p>
-
-    <div class="status-card">
-      <div class="stat">
-        <span class="stat-label">Goal:</span>
-        <span class="stat-value" id="goal">Loading...</span>
+    <div class="header">
+      <div>
+        <h1>BSV Crowdfunding Demo</h1>
+        <p class="subtitle">Workshop Demo - Pay with BSV Wallet and receive PushDrop tokens when goal is reached</p>
       </div>
-      <div class="stat">
-        <span class="stat-label">Raised:</span>
-        <span class="stat-value" id="raised">Loading...</span>
-      </div>
-      <div class="stat">
-        <span class="stat-label">Investors:</span>
-        <span class="stat-value" id="investors">Loading...</span>
-      </div>
-
-      <div class="progress-bar">
-        <div class="progress-fill" id="progress">0%</div>
-      </div>
-
-      <div class="stat">
-        <span class="stat-label">Status:</span>
-        <span class="stat-value" id="status">Active</span>
+      <div class="wallet-status">
+        <div class="status-badge disconnected clickable" id="walletStatusBadge" onclick="connectWallet()" title="Click to connect wallet">
+          <span class="status-icon">✕</span>
+          <span id="walletStatusText">Click to Connect</span>
+        </div>
       </div>
     </div>
 
-    <div class="input-group">
-      <label for="amount">Investment Amount (satoshis)</label>
-      <input type="number" id="amount" placeholder="Enter amount" min="1" value="1000">
+    <div id="crowdfundingContent" style="display: none;">
+      <div class="status-card">
+        <div class="stat">
+          <span class="stat-label">Goal:</span>
+          <span class="stat-value" id="goal">Loading...</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Raised:</span>
+          <span class="stat-value" id="raised">Loading...</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Investors:</span>
+          <span class="stat-value" id="investors">Loading...</span>
+        </div>
+
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress">0%</div>
+        </div>
+
+        <div class="stat">
+          <span class="stat-label">Status:</span>
+          <span class="stat-value" id="status">Active</span>
+        </div>
+      </div>
+
+      <div class="input-group">
+        <label for="amount">Investment Amount (satoshis)</label>
+        <input type="number" id="amount" placeholder="Enter amount" min="1" value="1000">
+      </div>
+
+      <button class="btn btn-primary" id="investBtn" onclick="invest()">
+        Invest with BSV Wallet
+      </button>
+
+      <button class="btn btn-success" id="completeBtn" onclick="complete()" style="display: none;">
+        Complete & Distribute Tokens
+      </button>
     </div>
-
-    <button class="btn btn-primary" id="investBtn" onclick="invest()">
-      Invest with BSV Wallet
-    </button>
-
-    <button class="btn btn-success" id="completeBtn" onclick="complete()" style="display: none;">
-      Complete & Distribute Tokens
-    </button>
 
     <div class="message" id="message"></div>
   </div>
@@ -244,11 +311,56 @@
         const data = await response.json()
         backendIdentityKey = data.identityKey
 
+        updateWalletBadge(true)
         console.log('Wallet connected')
+        showMessage('Wallet connected successfully!', 'success')
       } catch (error) {
         console.error('Wallet connection error:', error)
         showMessage('Please make sure BSV Desktop Wallet is running', 'error')
+        updateWalletBadge(false)
       }
+    }
+
+    function updateWalletBadge(connected) {
+      const badge = document.getElementById('walletStatusBadge')
+      const statusText = document.getElementById('walletStatusText')
+      const statusIcon = badge.querySelector('.status-icon')
+      const content = document.getElementById('crowdfundingContent')
+
+      if (connected) {
+        badge.classList.remove('disconnected', 'clickable')
+        badge.classList.add('connected')
+        badge.removeAttribute('onclick')
+        badge.removeAttribute('title')
+        statusIcon.textContent = '✓'
+        statusText.textContent = 'Wallet Connected'
+        content.style.display = 'block'
+      } else {
+        badge.classList.remove('connected')
+        badge.classList.add('disconnected', 'clickable')
+        badge.setAttribute('onclick', 'connectWallet()')
+        badge.setAttribute('title', 'Click to connect wallet')
+        statusIcon.textContent = '✕'
+        statusText.textContent = 'Click to Connect'
+        content.style.display = 'none'
+      }
+
+      // Update button states
+      updateButtonStates()
+    }
+
+    function updateButtonStates() {
+      const investBtn = document.getElementById('investBtn')
+      if (investBtn) {
+        investBtn.disabled = false
+        investBtn.textContent = 'Invest with BSV Wallet'
+      }
+    }
+
+    window.connectWallet = async function() {
+      const statusText = document.getElementById('walletStatusText')
+      statusText.textContent = 'Connecting...'
+      await initWallet()
     }
 
     async function loadStatus() {
@@ -274,14 +386,14 @@
       const amount = parseInt(document.getElementById('amount').value)
       const btn = document.getElementById('investBtn')
 
-      if (amount < 1) {
-        showMessage('Please enter a valid amount', 'error')
+      if (!wallet || !backendIdentityKey) {
+        showMessage('Please connect your wallet first', 'error')
         return
       }
 
-      if (!wallet) {
-        await initWallet()
-        if (!wallet) return
+      if (amount < 1) {
+        showMessage('Please enter a valid amount', 'error')
+        return
       }
 
       btn.disabled = true
@@ -351,8 +463,7 @@
         console.error('Investment error:', error)
         showMessage('Error: ' + error.message, 'error')
       } finally {
-        btn.disabled = false
-        btn.textContent = 'Invest with BSV Wallet'
+        updateButtonStates()
       }
     }
 

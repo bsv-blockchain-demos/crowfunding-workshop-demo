@@ -22,6 +22,7 @@ export default function Home() {
 
   async function initWallet() {
     try {
+      setLoading(true)
       const w = new WalletClient('json-api', 'localhost')
       await w.connectToSubstrate()
       setWallet(w)
@@ -30,9 +31,12 @@ export default function Home() {
       const data = await response.json()
       setBackendIdentityKey(data.identityKey)
       console.log('Wallet connected')
+      showMessage('Wallet connected successfully!', 'success')
     } catch (error) {
       console.error('Wallet connection error:', error)
       showMessage('Please make sure BSV Desktop Wallet is running', 'error')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -153,80 +157,105 @@ export default function Home() {
     setTimeout(() => setMessage(''), 5000)
   }
 
-  if (!status) return <div className={styles.container}>Loading...</div>
+  const isWalletConnected = wallet && backendIdentityKey
 
   return (
     <div className={styles.container}>
       <div className={styles.card}>
-        <h1>BSV Crowdfunding Demo</h1>
-        <p className={styles.subtitle}>Pay with BSV Wallet and receive PushDrop tokens</p>
-
-        <div className={styles.statusCard}>
-          <div className={styles.stat}>
-            <span>Goal:</span>
-            <span>{status.goal} sats</span>
+        <div className={styles.header}>
+          <div>
+            <h1>BSV Crowdfunding Demo</h1>
+            <p className={styles.subtitle}>Pay with BSV Wallet and receive PushDrop tokens</p>
           </div>
-          <div className={styles.stat}>
-            <span>Raised:</span>
-            <span>{status.raised} sats</span>
-          </div>
-          <div className={styles.stat}>
-            <span>Investors:</span>
-            <span>{status.investorCount}</span>
-          </div>
-
-          <div className={styles.progressBar}>
-            <div className={styles.progressFill} style={{ width: `${status.percentFunded}%` }}>
-              {status.percentFunded}%
-            </div>
-          </div>
-
-          <div className={styles.stat}>
-            <span>Status:</span>
-            <span>{status.isComplete ? '✅ FUNDED' : 'Active'}</span>
-          </div>
-        </div>
-
-        {status.investors && status.investors.length > 0 && (
-          <div className={styles.investorList}>
-            <h3>Investors</h3>
-            {status.investors.map((inv: any, idx: number) => (
-              <div key={idx} className={styles.investorItem}>
-                <span className={styles.investorKey}>{inv.identityKey}</span>
-                <span className={styles.investorAmount}>{inv.amount} sats</span>
+          <div className={styles.walletStatus}>
+            {isWalletConnected ? (
+              <div className={styles.statusBadge + ' ' + styles.connected}>
+                <span className={styles.statusIcon}>✓</span>
+                <span>Wallet Connected</span>
               </div>
-            ))}
+            ) : (
+              <div
+                className={styles.statusBadge + ' ' + styles.disconnected + ' ' + styles.clickable}
+                onClick={initWallet}
+                title="Click to connect wallet"
+              >
+                <span className={styles.statusIcon}>✕</span>
+                <span>{loading ? 'Connecting...' : 'Click to Connect'}</span>
+              </div>
+            )}
           </div>
-        )}
-
-        <div className={styles.inputGroup}>
-          <label htmlFor="amount">Investment Amount (satoshis)</label>
-          <input
-            type="number"
-            id="amount"
-            value={amount}
-            onChange={(e) => setAmount(parseInt(e.target.value))}
-            min="1"
-            disabled={loading || status.isComplete}
-          />
         </div>
 
-        <button
-          className={styles.btnPrimary}
-          onClick={invest}
-          disabled={loading || status.isComplete}
-        >
-          {loading ? 'Processing...' : 'Invest with BSV Wallet'}
-        </button>
+        {isWalletConnected && status && (
+          <>
+            <div className={styles.statusCard}>
+              <div className={styles.stat}>
+                <span>Goal:</span>
+                <span>{status.goal} sats</span>
+              </div>
+              <div className={styles.stat}>
+                <span>Raised:</span>
+                <span>{status.raised} sats</span>
+              </div>
+              <div className={styles.stat}>
+                <span>Investors:</span>
+                <span>{status.investorCount}</span>
+              </div>
 
-        {status.raised >= status.goal && !status.isComplete && (
-          <button
-            className={styles.btnSuccess}
-            onClick={complete}
-            disabled={loading}
-          >
-            {loading ? 'Distributing...' : 'Complete & Distribute Tokens'}
-          </button>
+              <div className={styles.progressBar}>
+                <div className={styles.progressFill} style={{ width: `${status.percentFunded}%` }}>
+                  {status.percentFunded}%
+                </div>
+              </div>
+
+              <div className={styles.stat}>
+                <span>Status:</span>
+                <span>{status.isComplete ? '✅ FUNDED' : 'Active'}</span>
+              </div>
+            </div>
+
+            {status.investors && status.investors.length > 0 && (
+              <div className={styles.investorList}>
+                <h3>Investors</h3>
+                {status.investors.map((inv: any, idx: number) => (
+                  <div key={idx} className={styles.investorItem}>
+                    <span className={styles.investorKey}>{inv.identityKey}</span>
+                    <span className={styles.investorAmount}>{inv.amount} sats</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className={styles.inputGroup}>
+              <label htmlFor="amount">Investment Amount (satoshis)</label>
+              <input
+                type="number"
+                id="amount"
+                value={amount}
+                onChange={(e) => setAmount(parseInt(e.target.value))}
+                min="1"
+                disabled={loading || status.isComplete}
+              />
+            </div>
+
+            <button
+              className={styles.btnPrimary}
+              onClick={invest}
+              disabled={loading || status.isComplete}
+            >
+              {loading ? 'Processing...' : 'Invest with BSV Wallet'}
+            </button>
+
+            {status.raised >= status.goal && !status.isComplete && (
+              <button
+                className={styles.btnSuccess}
+                onClick={complete}
+                disabled={loading}
+              >
+                {loading ? 'Distributing...' : 'Complete & Distribute Tokens'}
+              </button>
+            )}
+          </>
         )}
 
         {message && (

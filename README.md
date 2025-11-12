@@ -1,91 +1,361 @@
-# BSV Crowdfunding Demo
+# BSV Blockchain Crowdfunding Demo
 
-A minimal crowdfunding demo for BSV Code Workshop showcasing:
-- BSV Desktop Wallet connection
-- Certificate-based authentication
-- Payment Express Middleware for accepting payments
-- PushDrop token distribution to investors
+A proof-of-concept crowdfunding application built on the BSV blockchain, demonstrating real micropayments, BRC-29 key derivation, and PushDrop token distribution.
+
+## Features
+
+- 💰 **Real BSV Payments** - Accept micropayments with sub-cent transaction fees
+- 🔐 **BRC-29 Protocol** - Secure key derivation for privacy and security
+- 🎫 **PushDrop Tokens** - Distribute investor tokens costing just 1 satoshi each
+- ⚡ **Instant Settlement** - Transactions broadcast and confirmed in seconds
+- 📊 **Real-time Tracking** - Live crowdfunding progress updates
 
 ## Architecture
 
-### Backend (Express + BSV SDK + Wallet Toolbox)
-- **Backend Wallet**: Dedicated wallet using @bsv/wallet-toolbox to receive and manage funds
-- **Auth Middleware**: Connects with local BSV wallet using certificates
-- **Payment Middleware**: Accepts BSV payments for investments
-- **PushDrop Tokens**: Distributes encrypted tokens to investors with their investment data
+### Components
 
-### Frontend (HTML + BSV SDK)
-- Clean, minimal interface
-- Real-time crowdfunding status
-- One-click investment with wallet
-- Token distribution UI
+- **Frontend (React/Next.js)** - User interface with BSV wallet integration
+- **Backend API (Next.js API Routes)** - Payment processing and token distribution
+- **BSV Wallet Toolbox** - Server-side wallet management
+- **Persistent Storage** - JSON-based crowdfunding state
 
-## Setup
+### Key Technologies
 
-1. Install dependencies:
+- [BSV SDK](https://docs.bsvblockchain.org/) - Transaction building and signing
+- [BSV Wallet Toolbox](https://github.com/bitcoin-sv/ts-wallet-toolbox) - Wallet management
+- [Next.js](https://nextjs.org/) - Full-stack framework
+- [BSV Desktop Wallet](https://chromewebstore.google.com/detail/bsv-wallet/ifucbdeohgfkopafjjhiakfafkjjfjnn) - User wallet
+
+## Prerequisites
+
+- Node.js v18 or higher
+- BSV Desktop Wallet (or compatible wallet with JSON-API support)
+- Some BSV satoshis for testing (10,000+ recommended)
+
+## Quick Start
+
+### 1. Install Dependencies
+
 ```bash
 npm install
 ```
 
-2. Make sure you have BSV Desktop Wallet running locally
+### 2. Setup Backend Wallet
 
-3. Generate and fund the backend wallet:
+This creates a backend wallet and funds it with 10,000 satoshis from your local wallet:
+
 ```bash
 npm run setup
 ```
-This will:
-- Create a new private key for the backend wallet
-- Save it to `.env` file
-- Fund the wallet with 100,000 satoshis from your local wallet
-- Set up wallet storage
 
-4. Run the development server:
+**What this does:**
+- Creates a new private key (or uses existing from `.env`)
+- Initializes a backend wallet using BSV Wallet Toolbox
+- Connects to your BSV Desktop Wallet
+- Sends 10,000 satoshis to the backend wallet via BRC-29 payment
+- Saves wallet configuration to `.env`
+
+### 3. Start the Application
+
 ```bash
 npm run dev
 ```
 
-5. Open browser to `http://localhost:3000`
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## Usage
+
+### Making an Investment
+
+1. Enter investment amount in satoshis
+2. Click "Invest with BSV Wallet"
+3. Approve transaction in wallet popup
+4. Watch your investment appear in real-time!
+
+### Completing the Crowdfunding
+
+Once the goal is reached:
+
+1. "Complete & Distribute Tokens" button appears
+2. Click to distribute PushDrop tokens to all investors
+3. Each investor receives a token representing their investment
+4. Transaction is broadcast to the BSV blockchain
+
+## Project Structure
+
+```
+├── pages/
+│   ├── index.tsx              # React frontend interface
+│   └── api/
+│       ├── wallet-info.ts     # Returns backend wallet identity
+│       ├── invest.ts          # Accepts and processes investments
+│       ├── status.ts          # Returns crowdfunding progress
+│       └── complete.ts        # Distributes tokens to investors
+├── src/
+│   ├── wallet.ts              # Backend wallet initialization
+│   ├── pushdrop.ts            # PushDrop token creation
+│   ├── setupWallet.ts         # Setup script for backend wallet
+│   └── types.ts               # TypeScript type definitions
+├── lib/
+│   ├── crowdfunding.ts        # Crowdfunding state management
+│   └── storage.ts             # Persistent JSON storage
+├── public/
+│   └── index.html             # Alternative vanilla JS frontend
+└── styles/                    # CSS styling
+```
 
 ## How It Works
 
-1. **Investor connects wallet**: Frontend uses AuthFetch from @bsv/sdk
-2. **Make investment**: User specifies amount, payment middleware processes BSV payment
-3. **Track investments**: Server records each investor's identity key and amount
-4. **Complete funding**: When goal is reached, anyone can trigger token distribution
-5. **Distribute tokens**: PushDrop tokens are sent to each investor containing their investment data (encrypted)
+### Investment Flow
+
+1. **Frontend** connects to user's BSV Desktop Wallet
+2. **User** enters investment amount
+3. **BRC-29 Derivation** creates unique payment key:
+   - Protocol ID: `[2, '3241645161d8']`
+   - Derivation Prefix: `'crowdfunding'`
+   - Derivation Suffix: `'investment' + timestamp`
+4. **Transaction** created with `randomizeOutputs: false` for predictable output index
+5. **Backend** internalizes payment using matching derivation parameters
+6. **State** updated and persisted to disk
+
+### Token Distribution Flow
+
+1. **Check** if goal is reached and not already complete
+2. **Create** PushDrop token for each investor:
+   - Token contains investor's amount and identity key
+   - Locked to investor's public key
+   - Costs only 1 satoshi per token
+3. **Broadcast** transaction with all token outputs
+4. **Mark** crowdfunding as complete
+5. **Save** final state to disk
 
 ## API Endpoints
 
-### `GET /status`
-Returns crowdfunding status (public)
+### GET `/api/wallet-info`
 
-### `POST /invest`
-Accepts investment (requires auth + payment)
-- Body: `{ amount: number }`
-- Returns: Investment confirmation
+Returns backend wallet's identity key.
 
-### `POST /complete`
-Completes crowdfunding and distributes tokens (requires auth)
-- Only works when goal is reached
-- Creates transaction with PushDrop outputs for each investor
+**Response:**
+```json
+{
+  "identityKey": "03ed2cab..."
+}
+```
 
-## Demo Flow
+### POST `/api/invest`
 
-1. Open the webpage
-2. Click "Invest with BSV Wallet"
-3. Wallet will prompt for authentication
-4. Enter investment amount
-5. Wallet processes payment
-6. Investment is recorded
-7. When goal is reached, click "Complete & Distribute Tokens"
-8. All investors receive PushDrop tokens with their investment data
+Accepts an investment payment.
 
-## Workshop Notes
+**Request Body:**
+```json
+{
+  "transaction": "base64-encoded-beef",
+  "investorKey": "03b1b8a7...",
+  "derivationPrefix": "Y3Jvd2RmdW5kaW5n",
+  "derivationSuffix": "aW52ZXN0bWVudDE3NjI5NDI5NTc4NTg="
+}
+```
 
-This is a **minimal demo** focused on BSV SDK architecture:
-- Simplified error handling
-- In-memory state (no database)
-- Single crowdfunding campaign
-- Clean, readable code for learning
+**Response:**
+```json
+{
+  "success": true,
+  "amount": 1000,
+  "totalRaised": 1000,
+  "message": "Investment received! Tokens will be distributed when goal is reached."
+}
+```
 
-The reference folders (`brc-100-payments-master` and `payment-express-middleware-master`) are included for reference only and are not modified.
+### GET `/api/status`
+
+Returns current crowdfunding status.
+
+**Response:**
+```json
+{
+  "goal": 100,
+  "raised": 50,
+  "investorCount": 1,
+  "isComplete": false,
+  "percentFunded": 50,
+  "investors": [
+    {
+      "identityKey": "03b1b8a7dd0231e0...",
+      "amount": 50,
+      "timestamp": 1762943257847
+    }
+  ]
+}
+```
+
+### POST `/api/complete`
+
+Distributes tokens when goal is reached.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Tokens distributed to all investors!",
+  "txid": "852ac41bd548e293...",
+  "investorCount": 2
+}
+```
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file (auto-generated by setup script):
+
+```env
+PRIVATE_KEY=your_backend_wallet_private_key_hex
+STORAGE_URL=https://storage.babbage.systems
+NETWORK=main
+```
+
+### Crowdfunding Parameters
+
+Edit in `lib/crowdfunding.ts`:
+
+```typescript
+export let crowdfunding: CrowdfundingState = {
+  goal: 100,        // Goal in satoshis
+  raised: 0,        // Amount raised
+  investors: [],    // Investor list
+  isComplete: false // Completion status
+}
+```
+
+## Important Notes
+
+### Transaction Fees
+
+The backend wallet needs **extra satoshis** beyond the crowdfunding goal to pay for:
+- Token distribution transaction fees
+- Mining fees
+- Script execution costs
+
+**Recommendation:** Fund backend with at least 10,000 satoshis to ensure sufficient funds for token distribution.
+
+### Output Randomization
+
+Always use `randomizeOutputs: false` in `createAction` calls to ensure predictable output indices for `internalizeAction`.
+
+```typescript
+const result = await wallet.createAction({
+  outputs: [...],
+  options: {
+    randomizeOutputs: false  // Critical!
+  }
+})
+```
+
+### State Persistence
+
+Crowdfunding state is saved to `.crowdfunding_data/` directory, keyed by backend wallet identity. This ensures:
+- State survives server restarts
+- Multiple wallets can run on same system
+- Historical data is preserved
+
+## Troubleshooting
+
+### "Insufficient funds" Error
+
+**Problem:** Backend wallet doesn't have enough satoshis for transaction fees.
+
+**Solution:**
+```bash
+npm run setup  # Add more funds
+```
+
+### "Payment not accepted" Error
+
+**Problem:** Key derivation mismatch between frontend and backend.
+
+**Solutions:**
+- Verify protocol ID matches: `[2, '3241645161d8']`
+- Check derivation parameters are identical
+- Ensure `forSelf: false` on payer side, `forSelf: true` on payee side
+
+### "Session not found" Error
+
+**Problem:** Wallet authentication expired.
+
+**Solution:**
+- Refresh the page
+- Reconnect to wallet
+- Restart BSV Desktop Wallet
+
+### Reset Crowdfunding State
+
+```bash
+# Remove existing data
+rm -rf .crowdfunding_data
+
+# Restart server
+npm run dev
+```
+
+## Development
+
+### Run Tests
+
+```bash
+npm test
+```
+
+### Build for Production
+
+```bash
+npm run build
+npm start
+```
+
+### Type Checking
+
+```bash
+npm run type-check
+```
+
+## Workshop
+
+This project includes a comprehensive 40-minute workshop script for presenting this PoC to developers. See [WORKSHOP_SCRIPT.md](./WORKSHOP_SCRIPT.md) for:
+
+- Complete presentation outline
+- Technical deep-dives
+- Live demo instructions
+- Code walkthroughs
+- Q&A preparation
+
+## Resources
+
+### Documentation
+- [BSV SDK Documentation](https://docs.bsvblockchain.org/)
+- [BSV Wallet Toolbox](https://github.com/bitcoin-sv/ts-wallet-toolbox)
+- [BRC Standards](https://brc.dev/)
+
+### Tools
+- [BSV Desktop Wallet](https://chromewebstore.google.com/detail/bsv-wallet/ifucbdeohgfkopafjjhiakfafkjjfjnn)
+- [WhatsOnChain Explorer](https://whatsonchain.com/)
+- [BSV Testnet Faucet](https://faucet.bitcoincloud.net/)
+
+### Community
+- [BSV Discord](https://discord.gg/bsv)
+- [BSV GitHub](https://github.com/bitcoin-sv)
+
+## License
+
+[MIT License](LICENSE)
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Acknowledgments
+
+Built with the BSV blockchain ecosystem tools and libraries. Special thanks to the BSV development community for their excellent documentation and support.
+
+---
+
+**Note:** This is a proof-of-concept for educational purposes. For production use, add proper error handling, security measures, database storage, and comprehensive testing.

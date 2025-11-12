@@ -17,6 +17,61 @@
   box-shadow: 0 20px 60px rgba(0,0,0,0.3);
 }
 
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  gap: 20px;
+}
+
+.walletStatus {
+  flex-shrink: 0;
+}
+
+.statusBadge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+}
+
+.statusIcon {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.connected {
+  background: #d1fae5;
+  color: #065f46;
+  border: 2px solid #10b981;
+}
+
+.disconnected {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 2px solid #ef4444;
+}
+
+.clickable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.clickable:hover {
+  opacity: 0.8;
+  transform: translateY(-1px);
+}
+
+.clickable:active {
+  transform: translateY(0);
+}
+
 .card h1 {
   margin: 0 0 10px 0;
   color: #333;
@@ -25,7 +80,7 @@
 
 .subtitle {
   color: #666;
-  margin: 0 0 30px 0;
+  margin: 0 0 10px 0;
   font-size: 14px;
 }
 
