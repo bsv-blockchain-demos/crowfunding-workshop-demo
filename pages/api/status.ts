@@ -5,38 +5,21 @@ import { loadCrowdfundingData } from '../../lib/storage'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    let actualBalance = 0
-    let walletIdentity = ''
-
-    // Try to get actual wallet balance from UTXOs
+    // Load crowdfunding state
     try {
       const wallet = await initializeBackendWallet()
       const identityKey = await wallet.getPublicKey({ identityKey: true })
-      walletIdentity = identityKey.publicKey
 
       // Load crowdfunding state for this wallet
-      const loadedState = loadCrowdfundingData(walletIdentity)
+      const loadedState = loadCrowdfundingData(identityKey.publicKey)
       setCrowdfundingState(loadedState)
-
-      const result = await wallet.listOutputs({
-        basket: 'default',
-        includeEnvelope: false
-      })
-
-      // listOutputs returns an object with outputs array
-      const utxos = Array.isArray(result) ? result : (result.outputs || [])
-
-      // Sum up all unspent outputs
-      actualBalance = utxos.reduce((sum: number, utxo: any) => sum + (utxo.satoshis || 0), 0)
-    } catch (balanceError) {
-      console.error('Could not get wallet balance:', balanceError)
-      // Continue without balance
+    } catch (loadError) {
+      console.error('Could not load wallet state:', loadError)
     }
 
     res.status(200).json({
       goal: crowdfunding.goal,
       raised: crowdfunding.raised,
-      actualBalance,
       investorCount: crowdfunding.investors.length,
       isComplete: crowdfunding.isComplete,
       percentFunded: Math.round((crowdfunding.raised / crowdfunding.goal) * 100),

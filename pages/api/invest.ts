@@ -103,30 +103,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const identityKey = await wallet.getPublicKey({ identityKey: true })
     saveCrowdfundingData(identityKey.publicKey, crowdfunding)
 
-    // Get updated wallet balance from UTXOs
-    let actualBalance = 0
-    try {
-      const result = await wallet.listOutputs({
-        basket: 'default',
-        includeEnvelope: false
-      })
-      const utxos = Array.isArray(result) ? result : (result.outputs || [])
-      actualBalance = utxos.reduce((sum: number, utxo: any) => sum + (utxo.satoshis || 0), 0)
-    } catch (e) {
-      console.error('Could not get balance:', e)
-    }
-
     console.log('Investment recorded:', {
       amount: actualAmount,
-      totalRaised: crowdfunding.raised,
-      actualWalletBalance: actualBalance
+      totalRaised: crowdfunding.raised
     })
 
     res.status(200).json({
       success: true,
       amount: actualAmount,
       totalRaised: crowdfunding.raised,
-      actualBalance,
       message: 'Investment received! Tokens will be distributed when goal is reached.'
     })
   } catch (error: any) {

@@ -59,15 +59,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     let result: any
     try {
-      result = await Promise.race([
-        wallet.createAction({
-          description: 'Distribute crowdfunding tokens to investors',
-          outputs
-        }),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Transaction creation timeout')), 30000)
-        )
-      ]) as any
+      result = await wallet.createAction({
+        description: 'Distribute crowdfunding tokens to investors',
+        outputs,
+        options: {
+          randomizeOutputs: false
+        }
+      })
 
       console.log('Transaction result:', result)
       console.log(`Tokens distributed! TXID: ${result.txid}`)

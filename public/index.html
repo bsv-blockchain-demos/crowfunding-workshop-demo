@@ -314,7 +314,10 @@
             satoshis: amount,
             outputDescription: 'Crowdfunding investment'
           }],
-          description: 'Investment in crowdfunding'
+          description: 'Investment in crowdfunding',
+          options: {
+            randomizeOutputs: false
+          }
         })
 
         if (!result.tx) {

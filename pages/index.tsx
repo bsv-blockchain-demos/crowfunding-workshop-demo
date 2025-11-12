@@ -84,7 +84,10 @@ export default function Home() {
           satoshis: amount,
           outputDescription: 'Crowdfunding investment'
         }],
-        description: 'Investment in crowdfunding'
+        description: 'Investment in crowdfunding',
+        options: {
+          randomizeOutputs: false
+        }
       })
 
       console.log('Transaction created:', result.txid)
@@ -164,12 +167,8 @@ export default function Home() {
             <span>{status.goal} sats</span>
           </div>
           <div className={styles.stat}>
-            <span>Raised (Tracked):</span>
+            <span>Raised:</span>
             <span>{status.raised} sats</span>
-          </div>
-          <div className={styles.stat}>
-            <span>Wallet Balance:</span>
-            <span>{status.actualBalance} sats</span>
           </div>
           <div className={styles.stat}>
             <span>Investors:</span>
