@@ -1,8 +1,9 @@
 services:
-  crowdfunding-workshop:
+  crowdfunding-workshop-prod:
     build: .
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-    restart: always
+    restart: unless-stopped
+
