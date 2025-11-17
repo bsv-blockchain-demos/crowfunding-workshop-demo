@@ -1,5 +1,5 @@
 import { PrivateKey, KeyDeriver } from '@bsv/sdk'
-import { Wallet, WalletStorageManager, WalletSigner, Services, StorageClient } from '@bsv/wallet-toolbox'
+import { Wallet, WalletStorageManager, WalletSigner, Services, StorageClient, Chain } from '@bsv/wallet-toolbox'
 import { config } from 'dotenv'
 
 config() // Load .env file
@@ -7,7 +7,7 @@ config() // Load .env file
 export async function initializeBackendWallet(): Promise<Wallet> {
   const privateKeyHex = process.env.PRIVATE_KEY
   const storageUrl = process.env.STORAGE_URL || 'https://storage.babbage.systems'
-  const network = process.env.NETWORK || 'main'
+  const network = (process.env.NETWORK || 'main') as Chain
 
   if (!privateKeyHex) {
     throw new Error('PRIVATE_KEY not found in .env. Run: npm run setup')
