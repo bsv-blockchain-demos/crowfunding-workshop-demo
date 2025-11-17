@@ -8,7 +8,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Get wallet balance from UTXOs
     const result = await wallet.listOutputs({
       basket: 'default',
-      includeEnvelope: false
+      //includeEnvelope: false
     })
     const utxos = Array.isArray(result) ? result : (result.outputs || [])
     const balance = utxos.reduce((sum: number, utxo: any) => sum + (utxo.satoshis || 0), 0)
