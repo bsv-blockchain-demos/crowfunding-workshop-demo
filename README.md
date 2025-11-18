@@ -23,7 +23,7 @@ A proof-of-concept crowdfunding application built on the BSV blockchain, demonst
 ### Key Technologies
 
 - [BSV SDK](https://docs.bsvblockchain.org/) - Transaction building and signing
-- [BSV Wallet Toolbox](https://github.com/bitcoin-sv/ts-wallet-toolbox) - Wallet management
+- [BSV Wallet Toolbox](https://github.com/bsv-blockchain/wallet-toolbox) - Wallet management
 - [Next.js](https://nextjs.org/) - Full-stack framework
 - [BSV Desktop Wallet](https://chromewebstore.google.com/detail/bsv-wallet/ifucbdeohgfkopafjjhiakfafkjjfjnn) - User wallet
 
@@ -398,21 +398,11 @@ npm start
 npm run type-check
 ```
 
-## Workshop
-
-This project includes a comprehensive 40-minute workshop script for presenting this PoC to developers. See [WORKSHOP_SCRIPT.md](./WORKSHOP_SCRIPT.md) for:
-
-- Complete presentation outline
-- Technical deep-dives
-- Live demo instructions
-- Code walkthroughs
-- Q&A preparation
-
 ## Resources
 
 ### Documentation
 - [BSV SDK Documentation](https://docs.bsvblockchain.org/)
-- [BSV Wallet Toolbox](https://github.com/bsv-blockchain/wallet-toolboxx)
+- [BSV Wallet Toolbox](https://github.com/bsv-blockchain/wallet-toolbox)
 - [BRC Standards](https://brc.dev/)
 
 ### Tools
