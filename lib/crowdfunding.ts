@@ -5,7 +5,8 @@ export let crowdfunding: CrowdfundingState = {
   goal: 100,
   raised: 0,
   investors: [],
-  isComplete: false
+  isComplete: false,
+  completionTxid: undefined
 }
 
 export function setCrowdfundingState(state: CrowdfundingState) {

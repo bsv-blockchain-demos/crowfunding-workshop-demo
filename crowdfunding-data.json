@@ -1,5 +1,5 @@
 {
-  "walletIdentity": "03ed2cabadb13426ec1ead0203d5a2c770461988608b8c9664a2addd65e569f2e7",
+  "walletIdentity": "03fad22fbce750d51261e618f82e121905122744a3086ad80c48f1bba223c86e62",
   "crowdfunding": {
     "goal": 100,
     "raised": 100,
@@ -7,9 +7,10 @@
       {
         "identityKey": "03b1b8a7dd0231e0bde4f1adf8f5fe54db8c0bc7647d95d62a6d66d5900d6da077",
         "amount": 100,
-        "timestamp": 1762946249201
+        "timestamp": 1763464415251
       }
     ],
-    "isComplete": true
+    "isComplete": true,
+    "completionTxid": "f1395bba2b09894194b2da7efb12c65c20f04338b17ad77058ff0f9a89616e01"
   }
 }

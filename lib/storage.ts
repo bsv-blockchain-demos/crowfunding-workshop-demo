@@ -34,7 +34,8 @@ export function loadCrowdfundingData(walletIdentity: string): CrowdfundingState 
     goal: 100,
     raised: 0,
     investors: [],
-    isComplete: false
+    isComplete: false,
+    completionTxid: undefined
   }
 }
 

@@ -9,4 +9,5 @@ export interface CrowdfundingState {
   raised: number
   investors: Investor[]
   isComplete: boolean
+  completionTxid?: string
 }

@@ -22,6 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       raised: crowdfunding.raised,
       investorCount: crowdfunding.investors.length,
       isComplete: crowdfunding.isComplete,
+      completionTxid: crowdfunding.completionTxid,
       percentFunded: Math.round((crowdfunding.raised / crowdfunding.goal) * 100),
       investors: crowdfunding.investors.map(inv => ({
         identityKey: inv.identityKey.slice(0, 16) + '...',

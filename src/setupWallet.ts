@@ -3,7 +3,7 @@ import { PrivateKey, WalletClient, WalletProtocol, PublicKey, P2PKH, KeyDeriver,
 import { Wallet, WalletStorageManager, WalletSigner, Services, StorageClient } from '@bsv/wallet-toolbox'
 import * as dotenv from 'dotenv'
 
-const AMOUNT = 10000
+const AMOUNT = 1000
 const NETWORK = 'main'
 const STORAGE_URL = 'https://storage.babbage.systems'
 const brc29ProtocolID: WalletProtocol = [2, '3241645161d8']

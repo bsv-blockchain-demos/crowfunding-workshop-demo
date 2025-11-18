@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { WalletClient, P2PKH, PublicKey, Utils, WalletProtocol } from '@bsv/sdk'
+import Link from 'next/link'
 import styles from '../styles/Home.module.css'
 
 const brc29ProtocolID: WalletProtocol = [2, '3241645161d8']
@@ -138,7 +139,13 @@ export default function Home() {
       const data = await response.json()
 
       if (response.ok) {
-        showMessage(`Success! Tokens distributed to ${data.investorCount} investors. TX: ${data.txid}`, 'success')
+        showMessage(
+          `Success! Tokens distributed to ${data.investorCount} investors.\n\n` +
+          `⚠️ IMPORTANT - Save this TXID to find your tokens:\n${data.txid}\n\n` +
+          `PushDrop tokens use P2PK and cannot be found by address.\n` +
+          `View transaction: https://whatsonchain.com/tx/${data.txid}`,
+          'success'
+        )
         await loadStatus()
       } else {
         showMessage(data.error || 'Failed to complete', 'error')
@@ -212,6 +219,22 @@ export default function Home() {
                 <span>Status:</span>
                 <span>{status.isComplete ? '✅ FUNDED' : 'Active'}</span>
               </div>
+
+              {status.isComplete && status.completionTxid && (
+                <div className={styles.stat} style={{ marginTop: '10px', padding: '10px', background: '#d1fae5', borderRadius: '8px' }}>
+                  <span style={{ color: '#065f46', fontSize: '14px' }}>
+                    <strong>Tokens Distributed!</strong>
+                  </span>
+                  <a
+                    href={`https://whatsonchain.com/tx/${status.completionTxid}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: '#059669', fontSize: '12px', fontFamily: 'monospace', textDecoration: 'underline' }}
+                  >
+                    TX: {status.completionTxid.slice(0, 16)}...
+                  </a>
+                </div>
+              )}
             </div>
 
             {status.investors && status.investors.length > 0 && (
@@ -255,6 +278,12 @@ export default function Home() {
                 {loading ? 'Distributing...' : 'Complete & Distribute Tokens'}
               </button>
             )}
+
+            <Link href="/tokens">
+              <button className={styles.btnPrimary} style={{ marginTop: '10px' }}>
+                View My PushDrop Tokens
+              </button>
+            </Link>
           </>
         )}
 
