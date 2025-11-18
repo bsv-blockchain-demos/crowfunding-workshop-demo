@@ -7,6 +7,7 @@ A proof-of-concept crowdfunding application built on the BSV blockchain, demonst
 - 💰 **Real BSV Payments** - Accept micropayments with sub-cent transaction fees
 - 🔐 **BRC-29 Protocol** - Secure key derivation for privacy and security
 - 🎫 **PushDrop Tokens** - Distribute investor tokens costing just 1 satoshi each
+- 🔍 **Token Viewer** - View and verify PushDrop tokens from completion transactions
 - ⚡ **Instant Settlement** - Transactions broadcast and confirmed in seconds
 - 📊 **Real-time Tracking** - Live crowdfunding progress updates
 
@@ -80,22 +81,45 @@ Once the goal is reached:
 2. Click to distribute PushDrop tokens to all investors
 3. Each investor receives a token representing their investment
 4. Transaction is broadcast to the BSV blockchain
+5. Completion TXID is automatically saved for token viewing
+
+### Viewing Your PushDrop Tokens
+
+After campaign completion:
+
+1. Click "View My PushDrop Tokens" on the main page
+2. Connect your BSV wallet (if not already connected)
+3. The system automatically:
+   - Loads the completion transaction TXID
+   - Fetches the transaction from WhatsOnChain
+   - Identifies tokens locked to your public key
+   - Displays token details with encrypted investment data
+4. Tokens locked to your identity key show with a green border
+5. Click transaction links to view on WhatsOnChain explorer
+
+**Note:** PushDrop tokens use P2PK (Pay-to-Public-Key) locking scripts, which means they lock directly to your public key rather than a hash. This allows your wallet to spend them, but they cannot be found by searching for your address on block explorers.
 
 ## Project Structure
 
 ```
 ├── pages/
-│   ├── index.tsx              # React frontend interface
+│   ├── index.tsx              # Main crowdfunding interface
+│   ├── tokens.tsx             # PushDrop token viewer page
+│   ├── _app.tsx               # Next.js app wrapper
 │   └── api/
 │       ├── wallet-info.ts     # Returns backend wallet identity
 │       ├── invest.ts          # Accepts and processes investments
 │       ├── status.ts          # Returns crowdfunding progress
-│       └── complete.ts        # Distributes tokens to investors
+│       ├── complete.ts        # Distributes tokens to investors
+│       ├── balance.ts         # Returns backend wallet balance
+│       ├── tokens.ts          # Legacy token fetching (deprecated)
+│       └── my-tokens.ts       # Fetches tokens from completion TX
 ├── src/
 │   ├── wallet.ts              # Backend wallet initialization
 │   ├── pushdrop.ts            # PushDrop token creation
 │   ├── setupWallet.ts         # Setup script for backend wallet
-│   └── types.ts               # TypeScript type definitions
+│   ├── types.ts               # TypeScript type definitions
+│   └── findPushDropTokens.ts  # Token detection utilities
 ├── lib/
 │   ├── crowdfunding.ts        # Crowdfunding state management
 │   └── storage.ts             # Persistent JSON storage
@@ -202,6 +226,35 @@ Distributes tokens when goal is reached.
 }
 ```
 
+### GET `/api/my-tokens?identityKey={key}&completionTxid={txid}`
+
+Fetches PushDrop tokens from the completion transaction for a specific investor.
+
+**Query Parameters:**
+- `identityKey` - Investor's public key (identity key)
+- `completionTxid` - Transaction ID from campaign completion
+
+**Response:**
+```json
+{
+  "identityKey": "03b1b8a7...",
+  "completionTxid": "852ac41b...",
+  "tokenCount": 1,
+  "allTokenCount": 2,
+  "tokens": [
+    {
+      "txid": "852ac41b...",
+      "vout": 0,
+      "satoshis": 1,
+      "publicKey": "03b1b8a7...",
+      "encryptedData": "1e3def91...",
+      "isPushDrop": true
+    }
+  ],
+  "txLink": "https://whatsonchain.com/tx/852ac41b..."
+}
+```
+
 ## Configuration
 
 ### Environment Variables
@@ -220,10 +273,11 @@ Edit in `lib/crowdfunding.ts`:
 
 ```typescript
 export let crowdfunding: CrowdfundingState = {
-  goal: 100,        // Goal in satoshis
-  raised: 0,        // Amount raised
-  investors: [],    // Investor list
-  isComplete: false // Completion status
+  goal: 100,           // Goal in satoshis
+  raised: 0,           // Amount raised
+  investors: [],       // Investor list
+  isComplete: false,   // Completion status
+  completionTxid: undefined // Transaction ID when completed
 }
 ```
 
@@ -253,10 +307,13 @@ const result = await wallet.createAction({
 
 ### State Persistence
 
-Crowdfunding state is saved to `.crowdfunding_data/` directory, keyed by backend wallet identity. This ensures:
+Crowdfunding state is saved to `crowdfunding-data.json` file, keyed by backend wallet identity. This ensures:
 - State survives server restarts
 - Multiple wallets can run on same system
 - Historical data is preserved
+- Completion transaction TXID is saved for token viewing
+
+**Important:** The `crowdfunding-data*.json` files are gitignored to prevent exposing campaign state.
 
 ## Troubleshooting
 
@@ -291,10 +348,33 @@ npm run setup  # Add more funds
 
 ```bash
 # Remove existing data
-rm -rf .crowdfunding_data
+rm crowdfunding-data.json
 
 # Restart server
 npm run dev
+```
+
+### Finding PushDrop Tokens
+
+**Problem:** Cannot find PushDrop tokens by searching address on WhatsOnChain.
+
+**Why:** PushDrop tokens use P2PK (Pay-to-Public-Key) locking scripts that lock directly to the raw public key, not a public key hash. This means they don't have a traditional "address" that can be searched.
+
+**Solution:** Use the built-in token viewer at `/tokens` which:
+1. Loads the completion transaction TXID from saved state
+2. Fetches the transaction from WhatsOnChain API
+3. Analyzes outputs to find tokens locked to your public key
+4. Displays token details with verification
+
+**Manual Verification:**
+```bash
+# View transaction on WhatsOnChain
+https://whatsonchain.com/tx/{completion_txid}
+
+# Look for outputs with:
+# - Type: "nonstandard"
+# - Value: 0.00000001 BTC (1 satoshi)
+# - Script containing your public key + OP_CHECKSIG
 ```
 
 ## Development
@@ -332,17 +412,17 @@ This project includes a comprehensive 40-minute workshop script for presenting t
 
 ### Documentation
 - [BSV SDK Documentation](https://docs.bsvblockchain.org/)
-- [BSV Wallet Toolbox](https://github.com/bitcoin-sv/ts-wallet-toolbox)
+- [BSV Wallet Toolbox](https://github.com/bsv-blockchain/wallet-toolboxx)
 - [BRC Standards](https://brc.dev/)
 
 ### Tools
-- [BSV Desktop Wallet](https://chromewebstore.google.com/detail/bsv-wallet/ifucbdeohgfkopafjjhiakfafkjjfjnn)
+- [BSV Desktop Wallet](https://desktop.bsvb.tech/)
 - [WhatsOnChain Explorer](https://whatsonchain.com/)
-- [BSV Testnet Faucet](https://faucet.bitcoincloud.net/)
 
 ### Community
 - [BSV Discord](https://discord.gg/bsv)
-- [BSV GitHub](https://github.com/bitcoin-sv)
+- [BSV GitHub](https://github.com/bsv-blockchain)
+- [BSV GitHub Demos](https://github.com/bsv-blockchain-demos)
 
 ## License
 
