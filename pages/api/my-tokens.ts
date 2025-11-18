@@ -63,9 +63,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const hasCheckSig = scriptAsm.includes('OP_CHECKSIG')
       const isNonStandard = output.scriptPubKey?.type === 'nonstandard' || output.scriptPubKey?.type === 'unknown'
 
-      // Check if this output contains the investor's public key
-      const containsInvestorKey = scriptHex.includes(identityKey.substring(2)) || scriptAsm.includes(identityKey)
-
       const isPushDrop = hasDropOps && hasCheckSig && (satoshis <= 100 || isNonStandard)
 
       if (isPushDrop) {
@@ -86,7 +83,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
         }
 
-        const isMyToken = containsInvestorKey || extractedPubKey === identityKey
+        // Normalize both keys for comparison (lowercase, no spaces)
+        const normalizedIdentityKey = identityKey.toLowerCase().trim()
+        const normalizedExtractedKey = extractedPubKey ? extractedPubKey.toLowerCase().trim() : ''
+
+        console.log(`Comparing keys:`)
+        console.log(`  Identity Key: ${normalizedIdentityKey}`)
+        console.log(`  Extracted Key: ${normalizedExtractedKey}`)
+        console.log(`  Match: ${normalizedExtractedKey === normalizedIdentityKey}`)
+
+        // Check if the extracted public key matches the investor's identity key
+        const isMyToken = normalizedExtractedKey === normalizedIdentityKey
 
         pushDropTokens.push({
           txid: completionTxid,
