@@ -208,6 +208,12 @@
   border: 1px solid #ef4444;
 }
 
+.message.info {
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #3b82f6;
+}
+
 .investorList {
   background: #f8f9fa;
   border-radius: 12px;

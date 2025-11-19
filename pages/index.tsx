@@ -21,21 +21,49 @@ export default function Home() {
     return () => clearInterval(interval)
   }, [])
 
-  async function initWallet() {
+  async function initWallet(retryCount = 0) {
+    const maxRetries = 3
     try {
       setLoading(true)
       const w = new WalletClient('json-api', 'localhost')
-      await w.connectToSubstrate()
-      setWallet(w)
 
-      const response = await fetch('/api/wallet-info')
-      const data = await response.json()
-      setBackendIdentityKey(data.identityKey)
+      // Add timeout to connection attempt
+      const connectionPromise = w.connectToSubstrate()
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Connection timeout')), 10000)
+      )
+
+      await Promise.race([connectionPromise, timeoutPromise])
+
+      // Set wallet immediately to show UI
+      setWallet(w)
       console.log('Wallet connected')
       showMessage('Wallet connected successfully!', 'success')
-    } catch (error) {
+
+      // Load wallet info and status in parallel (non-blocking for UI)
+      Promise.all([
+        fetch('/api/wallet-info'),
+        fetch('/api/status')
+      ]).then(async ([walletInfoResponse, statusResponse]) => {
+        const walletData = await walletInfoResponse.json()
+        const statusData = await statusResponse.json()
+
+        setBackendIdentityKey(walletData.identityKey)
+        setStatus(statusData)
+      }).catch(err => {
+        console.error('Failed to load wallet info/status:', err)
+      })
+    } catch (error: any) {
       console.error('Wallet connection error:', error)
-      showMessage('Please make sure BSV Desktop Wallet is running', 'error')
+
+      if (retryCount < maxRetries) {
+        const retryDelay = 1000 * (retryCount + 1) // Increasing delay
+        showMessage(`Connecting to wallet... (attempt ${retryCount + 1}/${maxRetries})`, 'info')
+        await new Promise(resolve => setTimeout(resolve, retryDelay))
+        return initWallet(retryCount + 1)
+      } else {
+        showMessage('Please make sure BSV Desktop Wallet is running and try again', 'error')
+      }
     } finally {
       setLoading(false)
     }
@@ -61,6 +89,8 @@ export default function Home() {
     setLoading(true)
 
     try {
+      showMessage('Preparing investment...', 'info')
+
       const { publicKey: investorKey } = await wallet.getPublicKey({ identityKey: true })
 
       console.log('Making initial request to /api/invest...')
@@ -110,6 +140,8 @@ export default function Home() {
 
         const lockingScript = new P2PKH().lock(PublicKey.fromString(derivedPublicKey).toAddress()).toHex()
 
+        showMessage(`Creating transaction for ${investmentAmount} sats...`, 'info')
+
         // Create the payment transaction
         const result = await wallet.createAction({
           outputs: [{
@@ -140,6 +172,7 @@ export default function Home() {
         })
 
         console.log('Retrying request with payment...')
+        showMessage('Sending payment to blockchain...', 'info')
 
         response = await fetch('/api/invest', {
           method: 'POST',
@@ -153,7 +186,7 @@ export default function Home() {
       const data = await response.json()
 
       if (response.ok) {
-        showMessage(`Investment successful! ${data.amount} sats sent.`, 'success')
+        showMessage(`✓ Investment successful! ${data.amount} sats received.`, 'success')
         await loadStatus()
       } else {
         showMessage(data.error || 'Investment failed', 'error')
@@ -166,10 +199,13 @@ export default function Home() {
     }
   }
 
-  async function complete() {
+  async function complete(retryCount = 0) {
+    const maxRetries = 2
     setLoading(true)
 
     try {
+      showMessage('Distributing PushDrop tokens...', 'info')
+
       const response = await fetch('/api/complete', {
         method: 'POST'
       })
@@ -186,10 +222,25 @@ export default function Home() {
         )
         await loadStatus()
       } else {
+        // Handle session timeout or other errors
+        if (data.error && data.error.includes('Session') && retryCount < maxRetries) {
+          showMessage(`Retrying... (${retryCount + 1}/${maxRetries})`, 'info')
+          await new Promise(resolve => setTimeout(resolve, 2000))
+          return complete(retryCount + 1)
+        }
+
         showMessage(data.error || 'Failed to complete', 'error')
       }
     } catch (error: any) {
       console.error('Complete error:', error)
+
+      // Retry on network or temporary errors
+      if (retryCount < maxRetries) {
+        showMessage(`Connection error, retrying... (${retryCount + 1}/${maxRetries})`, 'info')
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        return complete(retryCount + 1)
+      }
+
       showMessage('Error: ' + error.message, 'error')
     } finally {
       setLoading(false)
@@ -202,7 +253,8 @@ export default function Home() {
     setTimeout(() => setMessage(''), 5000)
   }
 
-  const isWalletConnected = wallet && backendIdentityKey
+  const isWalletConnected = !!wallet
+  const isFullyLoaded = wallet && backendIdentityKey && status
 
   return (
     <div className={styles.container}>
@@ -221,7 +273,7 @@ export default function Home() {
             ) : (
               <div
                 className={styles.statusBadge + ' ' + styles.disconnected + ' ' + styles.clickable}
-                onClick={initWallet}
+                onClick={() => initWallet()}
                 title="Click to connect wallet"
               >
                 <span className={styles.statusIcon}>✕</span>
@@ -231,7 +283,7 @@ export default function Home() {
           </div>
         </div>
 
-        {isWalletConnected && status && (
+        {isFullyLoaded && (
           <>
             <div className={styles.statusCard}>
               <div className={styles.stat}>
@@ -310,7 +362,7 @@ export default function Home() {
             {status.raised >= status.goal && !status.isComplete && (
               <button
                 className={styles.btnSuccess}
-                onClick={complete}
+                onClick={() => complete()}
                 disabled={loading}
               >
                 {loading ? 'Distributing...' : 'Complete & Distribute Tokens'}
