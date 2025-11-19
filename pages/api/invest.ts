@@ -1,19 +1,18 @@
-import type { NextApiRequest, NextApiResponse } from 'next'
-import { Utils, AtomicBEEF, Transaction } from '@bsv/sdk'
-import { initializeBackendWallet } from '../../src/wallet'
+import type { NextApiResponse } from 'next'
+import {
+  PaymentRequest,
+  runMiddleware,
+  getAuthMiddleware,
+  getPaymentMiddleware,
+  getWalletInstance
+} from '../../lib/middleware'
 import { crowdfunding } from '../../lib/crowdfunding'
 import { saveCrowdfundingData } from '../../lib/storage'
 import { Investor } from '../../src/types'
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: PaymentRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
-  }
-
-  const { transaction, investorKey, derivationPrefix, derivationSuffix } = req.body
-
-  if (!transaction || !investorKey || !derivationPrefix || !derivationSuffix) {
-    return res.status(400).json({ error: 'Missing required payment data' })
   }
 
   if (crowdfunding.isComplete) {
@@ -21,62 +20,61 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const wallet = await initializeBackendWallet()
+    // Run auth middleware first to establish identity
+    const authMiddleware = await getAuthMiddleware()
+    await runMiddleware(req, res, authMiddleware)
 
-    // Parse transaction to get actual amount
-    const tx = Utils.toArray(transaction, 'base64') as AtomicBEEF
-    const parsedTx = Transaction.fromBEEF(tx)
+    // For crowdfunding, we need to extract the investor identity from the payment transaction
+    // Since we allow unauthenticated requests, we need to manually handle identity
+    // The payment middleware will use req.auth.identityKey, so we need to extract it first
 
-    // Get the actual satoshi amount from the first output
-    const actualAmount = parsedTx.outputs[0].satoshis || 0
+    // Check if there's a payment header to extract identity from
+    const paymentHeaderRaw = req.headers['x-bsv-payment']
+    if (paymentHeaderRaw && typeof paymentHeaderRaw === 'string') {
+      try {
+        const paymentData = JSON.parse(paymentHeaderRaw)
 
-    if (actualAmount === 0) {
-      return res.status(400).json({ error: 'Invalid transaction amount' })
-    }
-
-    console.log('Internalizing payment:', {
-      amount: actualAmount,
-      investorKey,
-      derivationPrefix,
-      derivationSuffix
-    })
-
-    // Let's check what key the backend expects
-    try {
-      const backendKey = await wallet.getPublicKey({
-        protocolID: [2, '3241645161d8'],
-        keyID: `${derivationPrefix} ${derivationSuffix}`,
-        counterparty: investorKey,
-        forSelf: true
-      })
-      console.log('Backend expects this key:', backendKey.publicKey)
-
-      // Check what's in the transaction
-      console.log('Transaction output script:', parsedTx.outputs[0].lockingScript.toHex())
-    } catch (e) {
-      console.log('Error deriving backend key:', e)
-    }
-
-    // Internalize the payment
-    const result = await wallet.internalizeAction({
-      tx,
-      outputs: [{
-        outputIndex: 0,
-        protocol: 'wallet payment',
-        paymentRemittance: {
-          derivationPrefix,
-          derivationSuffix,
-          senderIdentityKey: investorKey
+        // Extract the investor identity from the transaction
+        // We need to derive the counterparty from the derivation parameters
+        // For now, let's get it from a custom field in the payment header
+        if (paymentData.senderIdentityKey) {
+          // Override auth identity with the sender from payment
+          if (!req.auth) {
+            (req as any).auth = {}
+          }
+          (req as any).auth.identityKey = paymentData.senderIdentityKey
         }
-      }],
-      description: 'Crowdfunding investment'
-    })
+      } catch (e) {
+        console.error('Failed to parse payment header for identity:', e)
+      }
+    }
 
-    console.log('Internalization result:', result)
+    // Run payment middleware to handle the BSV payment
+    const paymentMiddleware = await getPaymentMiddleware()
+    await runMiddleware(req, res, paymentMiddleware)
 
-    if (!result.accepted) {
+    // At this point, req.auth.identityKey and req.payment are populated by the middleware
+    if (!req.payment?.accepted) {
       return res.status(400).json({ error: 'Payment not accepted' })
     }
+    console.log('Payment accepted:', req)
+    const actualAmount = req.payment.satoshisPaid
+    const investorKey = req.auth?.identityKey
+
+    if (!investorKey || investorKey === 'unknown') {
+      return res.status(400).json({ error: 'Investor identity required' })
+    }
+
+    if (actualAmount === 0) {
+      return res.status(400).json({ error: 'Invalid investment amount' })
+    }
+
+    console.log('Investment received via payment middleware:', {
+      investorKey: investorKey.slice(0, 16) + '...',
+      amount: actualAmount,
+      derivationPrefix: req.payment.derivationPrefix,
+      derivationSuffix: req.payment.derivationSuffix
+    })
 
     // Check if investor already exists, update amount if so
     const existingInvestor = crowdfunding.investors.find(inv => inv.identityKey === investorKey)
@@ -100,6 +98,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log(`Total investors: ${crowdfunding.investors.length}, Total raised: ${crowdfunding.raised} sats`)
 
     // Get wallet identity and save to disk
+    const wallet = await getWalletInstance()
     const identityKey = await wallet.getPublicKey({ identityKey: true })
     saveCrowdfundingData(identityKey.publicKey, crowdfunding)
 
@@ -116,6 +115,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
   } catch (error: any) {
     console.error('Investment error:', error)
+
+    // Check if this is a 402 Payment Required response already sent by middleware
+    if (res.headersSent) {
+      return
+    }
+
     res.status(400).json({ error: error.message || 'Payment failed' })
   }
 }

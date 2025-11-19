@@ -61,56 +61,94 @@ export default function Home() {
     setLoading(true)
 
     try {
-      // Use consistent derivation like setupWallet
-      const derivationPrefix = Utils.toBase64(Utils.toArray('crowdfunding', 'utf8'))
-      const derivationSuffix = Utils.toBase64(Utils.toArray('investment' + Date.now(), 'utf8'))
-
       const { publicKey: investorKey } = await wallet.getPublicKey({ identityKey: true })
 
-      console.log('Creating payment:', {
-        investorKey,
-        backendIdentityKey,
-        derivationPrefix,
-        derivationSuffix
-      })
+      console.log('Making initial request to /api/invest...')
 
-      const { publicKey: derivedPublicKey } = await wallet.getPublicKey({
-        counterparty: backendIdentityKey,
-        protocolID: brc29ProtocolID,
-        keyID: `${derivationPrefix} ${derivationSuffix}`,
-        forSelf: false
-      })
-
-      const lockingScript = new P2PKH().lock(PublicKey.fromString(derivedPublicKey).toAddress()).toHex()
-
-      const result = await wallet.createAction({
-        outputs: [{
-          lockingScript,
-          satoshis: amount,
-          outputDescription: 'Crowdfunding investment'
-        }],
-        description: 'Investment in crowdfunding',
-        options: {
-          randomizeOutputs: false
-        }
-      })
-
-      console.log('Transaction created:', result.txid)
-
-      if (!result.tx) {
-        throw new Error('Transaction creation failed')
-      }
-
-      const response = await fetch('/api/invest', {
+      // Step 1: Make initial request (will receive 402 with derivation prefix)
+      let response = await fetch('/api/invest', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transaction: Utils.toBase64(result.tx),
-          investorKey,
-          derivationPrefix,
-          derivationSuffix
-        })
+        headers: { 'Content-Type': 'application/json' }
       })
+
+      // Step 2: If we get a 402, the middleware is asking for payment
+      if (response.status === 402) {
+        const derivationPrefix = response.headers.get('x-bsv-payment-derivation-prefix')
+        const satoshisRequired = response.headers.get('x-bsv-payment-satoshis-required')
+
+        console.log('402 Payment Required received:', {
+          derivationPrefix,
+          satoshisRequired,
+          investorWantsToSend: amount
+        })
+
+        if (!derivationPrefix) {
+          throw new Error('Missing payment derivation prefix from server')
+        }
+
+        // Use the user's chosen amount, not the server's minimum
+        const investmentAmount = amount
+
+        // Create derivation suffix
+        const derivationSuffix = Utils.toBase64(Utils.toArray('investment' + Date.now(), 'utf8'))
+
+        console.log('Creating payment transaction:', {
+          investorKey,
+          backendIdentityKey,
+          derivationPrefix,
+          derivationSuffix,
+          amount: investmentAmount
+        })
+
+        // Derive the payment key using BRC-29
+        const { publicKey: derivedPublicKey } = await wallet.getPublicKey({
+          counterparty: backendIdentityKey,
+          protocolID: brc29ProtocolID,
+          keyID: `${derivationPrefix} ${derivationSuffix}`,
+          forSelf: false
+        })
+
+        const lockingScript = new P2PKH().lock(PublicKey.fromString(derivedPublicKey).toAddress()).toHex()
+
+        // Create the payment transaction
+        const result = await wallet.createAction({
+          outputs: [{
+            lockingScript,
+            satoshis: investmentAmount,
+            outputDescription: 'Crowdfunding investment'
+          }],
+          description: 'Investment in crowdfunding',
+          options: {
+            randomizeOutputs: false
+          }
+        })
+
+        console.log('Transaction created:', result.txid)
+
+        if (!result.tx) {
+          throw new Error('Transaction creation failed')
+        }
+
+        // Step 3: Retry the request with payment header
+        // The middleware expects transaction as base64
+        const paymentHeader = JSON.stringify({
+          derivationPrefix,
+          derivationSuffix,
+          transaction: Utils.toBase64(result.tx), // Must be base64-encoded
+          senderIdentityKey: investorKey, // Include for crowdfunding tracking
+          amount: investmentAmount // Include amount for price calculation
+        })
+
+        console.log('Retrying request with payment...')
+
+        response = await fetch('/api/invest', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-bsv-payment': paymentHeader
+          }
+        })
+      }
 
       const data = await response.json()
 

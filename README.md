@@ -24,6 +24,8 @@ A proof-of-concept crowdfunding application built on the BSV blockchain, demonst
 
 - [BSV SDK](https://docs.bsvblockchain.org/) - Transaction building and signing
 - [BSV Wallet Toolbox](https://github.com/bsv-blockchain/wallet-toolbox) - Wallet management
+- [Payment Express Middleware](https://www.npmjs.com/package/@bsv/payment-express-middleware) - BRC-103/104 payment handling
+- [Auth Express Middleware](https://www.npmjs.com/package/@bsv/auth-express-middleware) - BRC-103 authentication
 - [Next.js](https://nextjs.org/) - Full-stack framework
 - [BSV Desktop Wallet](https://chromewebstore.google.com/detail/bsv-wallet/ifucbdeohgfkopafjjhiakfafkjjfjnn) - User wallet
 
@@ -108,7 +110,7 @@ After campaign completion:
 │   ├── _app.tsx               # Next.js app wrapper
 │   └── api/
 │       ├── wallet-info.ts     # Returns backend wallet identity
-│       ├── invest.ts          # Accepts and processes investments
+│       ├── invest.ts          # Investment endpoint with payment middleware
 │       ├── status.ts          # Returns crowdfunding progress
 │       ├── complete.ts        # Distributes tokens to investors
 │       ├── balance.ts         # Returns backend wallet balance
@@ -122,7 +124,8 @@ After campaign completion:
 │   └── findPushDropTokens.ts  # Token detection utilities
 ├── lib/
 │   ├── crowdfunding.ts        # Crowdfunding state management
-│   └── storage.ts             # Persistent JSON storage
+│   ├── storage.ts             # Persistent JSON storage
+│   └── middleware.ts          # Payment & auth middleware configuration
 ├── public/
 │   └── index.html             # Alternative vanilla JS frontend
 └── styles/                    # CSS styling
@@ -130,17 +133,31 @@ After campaign completion:
 
 ## How It Works
 
-### Investment Flow
+### Investment Flow (BRC-103/104 Payment Middleware)
+
+The application uses `@bsv/payment-express-middleware` for secure micropayments following BRC-103/104 standards:
 
 1. **Frontend** connects to user's BSV Desktop Wallet
 2. **User** enters investment amount
-3. **BRC-29 Derivation** creates unique payment key:
-   - Protocol ID: `[2, '3241645161d8']`
-   - Derivation Prefix: `'crowdfunding'`
-   - Derivation Suffix: `'investment' + timestamp`
-4. **Transaction** created with `randomizeOutputs: false` for predictable output index
-5. **Backend** internalizes payment using matching derivation parameters
-6. **State** updated and persisted to disk
+3. **Initial Request** - Frontend sends POST to `/api/invest`
+4. **402 Payment Required** - Server responds with:
+   - HTTP 402 status code
+   - `x-bsv-payment-derivation-prefix` header (unique nonce)
+   - `x-bsv-payment-satoshis-required` header (minimum 1 satoshi)
+5. **Payment Creation** - Frontend:
+   - Derives payment key using BRC-29 with server's nonce
+   - Creates BSV transaction with user's chosen amount
+   - Transaction uses `randomizeOutputs: false` for predictable output index
+6. **Payment Submission** - Frontend retries with `x-bsv-payment` header containing:
+   - `derivationPrefix` (from server)
+   - `derivationSuffix` (client-generated timestamp)
+   - `transaction` (signed BEEF transaction)
+   - `senderIdentityKey` (investor's public key)
+7. **Server Processing**:
+   - Auth middleware establishes identity
+   - Payment middleware validates and internalizes transaction
+   - Investment is recorded with investor's key and amount
+8. **State** updated and persisted to disk
 
 ### Token Distribution Flow
 
@@ -168,19 +185,41 @@ Returns backend wallet's identity key.
 
 ### POST `/api/invest`
 
-Accepts an investment payment.
+Accepts an investment payment using BRC-103/104 payment middleware.
 
-**Request Body:**
-```json
+**Initial Request (triggers 402):**
+```
+POST /api/invest
+Content-Type: application/json
+```
+
+**402 Payment Required Response:**
+```
+HTTP/1.1 402 Payment Required
+x-bsv-payment-derivation-prefix: <base64-nonce>
+x-bsv-payment-satoshis-required: 1
+
 {
-  "transaction": "base64-encoded-beef",
-  "investorKey": "03b1b8a7...",
-  "derivationPrefix": "Y3Jvd2RmdW5kaW5n",
-  "derivationSuffix": "aW52ZXN0bWVudDE3NjI5NDI5NTc4NTg="
+  "status": "error",
+  "code": "ERR_PAYMENT_REQUIRED",
+  "satoshisRequired": 1,
+  "description": "A BSV payment is required to complete this request."
 }
 ```
 
-**Response:**
+**Payment Request:**
+```
+POST /api/invest
+Content-Type: application/json
+x-bsv-payment: {
+  "derivationPrefix": "<server-nonce>",
+  "derivationSuffix": "<client-timestamp>",
+  "transaction": <beef-transaction>,
+  "senderIdentityKey": "03b1b8a7..."
+}
+```
+
+**Success Response:**
 ```json
 {
   "success": true,
