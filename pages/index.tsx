@@ -1,20 +1,14 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { WalletClient, P2PKH, PublicKey, Utils, WalletProtocol } from '@bsv/sdk'
+import { P2PKH, PublicKey, Utils, WalletProtocol, Random } from '@bsv/sdk'
 import Link from 'next/link'
 import styles from '../styles/Home.module.css'
+import { useWallet } from '@/lib/wallet'
 
 const brc29ProtocolID: WalletProtocol = [2, '3241645161d8']
 
-// Utilidad para generar random bytes en base64
-function randomBytesBase64(length: number): string {
-  const bytes = new Uint8Array(length)
-  window.crypto.getRandomValues(bytes)
-  return btoa(String.fromCharCode(...bytes))
-}
-
 export default function Home() {
-  const [wallet, setWallet] = useState<WalletClient | null>(null)
+  const { wallet } = useWallet()
   const [backendIdentityKey, setBackendIdentityKey] = useState<string | null>(null)
   const [status, setStatus] = useState<any>(null)
   const [amount, setAmount] = useState(1000)
@@ -34,21 +28,7 @@ export default function Home() {
     setStatus(data)
   }
 
-  async function initWallet() {
-    try {
-      setLoading(true)
-      const w = new WalletClient()
-      setWallet(w)
-      console.log('Wallet connected')
-    } catch (error: any) {
-      console.error('Wallet connection error:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
-    initWallet()
     getWalletInfo()
     getStatus()
   }, [])
@@ -192,8 +172,8 @@ export default function Home() {
       }
       const { publicKey: investorKey } = await wallet.getPublicKey({ identityKey: true })
 
-      const derivationPrefix = randomBytesBase64(8)
-      const derivationSuffix = randomBytesBase64(8)
+      const derivationPrefix = Utils.toBase64(Random(8))
+      const derivationSuffix = Utils.toBase64(Random(8))
 
       const { publicKey: paymentKey } = await wallet.getPublicKey({
         protocolID: brc29ProtocolID,
@@ -217,7 +197,7 @@ export default function Home() {
             outputIndex: 0,
             protocol: 'basket insertion',
             insertionRemittance:{
-              basket:'mytokens',
+              basket:'crowdfunding',
             }
           }
         ],
@@ -234,15 +214,8 @@ export default function Home() {
           `View transaction: https://whatsonchain.com/tx/${data.txid}`,
           'success'
         )
-        await loadStatus()
+        await getStatus()
       } else {
-        // Handle session timeout or other errors
-        if (data.error && data.error.includes('Session') && retryCount < maxRetries) {
-          showMessage(`Retrying... (${retryCount + 1}/${maxRetries})`, 'info')
-          await new Promise(resolve => setTimeout(resolve, 2000))
-          return complete(retryCount + 1)
-        }
-
         showMessage(data.error || 'Failed to complete', 'error')
       }
     } catch (error: any) {
@@ -285,14 +258,14 @@ export default function Home() {
                 <span>Wallet Connected</span>
               </div>
             ) : (
-              <div
+              <button
                 className={styles.statusBadge + ' ' + styles.disconnected + ' ' + styles.clickable}
-                onClick={() => initWallet()}
+                onClick={() => window.location.reload()}
                 title="Click to connect wallet"
               >
                 <span className={styles.statusIcon}>✕</span>
                 <span>{loading ? 'Connecting...' : 'Click to Connect'}</span>
-              </div>
+              </button>
             )}
           </div>
         </div>

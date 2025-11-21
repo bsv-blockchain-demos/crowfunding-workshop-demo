@@ -1,8 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { wallet } from '../../src/wallet'
-import { createInvestorToken } from '../../src/pushdrop'
 import { crowdfunding } from '../../lib/crowdfunding'
-import { saveCrowdfundingData } from '../../lib/storage'
 import { PushDrop, Utils } from '@bsv/sdk'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -123,7 +121,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         {
           lockingScript: lockingScript.toHex(), // Convert script to hex format
           satoshis: 1, // Amount of satoshis to lock
-          basket: 'crowdfunding tokens', // Categorize output
+          basket: 'crowdfunding', // Categorize output
           outputDescription: 'Create crowdfunding token' // Output description
         }
       ],

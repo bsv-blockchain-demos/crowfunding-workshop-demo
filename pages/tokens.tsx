@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { WalletClient } from '@bsv/sdk'
 import styles from '../styles/Home.module.css'
+import { useWallet } from '../lib/wallet'
 
 interface PushDropToken {
   txid: string
@@ -33,15 +33,13 @@ interface TokensData {
 }
 
 export default function Tokens() {
-  const [wallet, setWallet] = useState<WalletClient | null>(null)
-  const [identityKey, setIdentityKey] = useState<string | null>(null)
+  const { wallet, identityKey } = useWallet()
   const [completionTxid, setCompletionTxid] = useState<string | null>(null)
   const [tokensData, setTokensData] = useState<TokensData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    initWallet()
     loadCampaignStatus()
   }, [])
 
@@ -55,29 +53,7 @@ export default function Tokens() {
         setError('Campaign not yet completed or completion TXID not saved. Complete a crowdfunding campaign to view tokens.')
       }
     }
-  }, [identityKey, completionTxid])
-
-  async function initWallet() {
-    try {
-      setLoading(true)
-      const w = new WalletClient('json-api', 'localhost')
-      await w.connectToSubstrate()
-      setWallet(w)
-
-      // Get the investor's identity key
-      const { publicKey: investorKey } = await w.getPublicKey({ identityKey: true })
-      setIdentityKey(investorKey)
-      console.log('Investor Wallet connected, Identity Key:', investorKey)
-
-      const tokenList = await wallet?.listOutputs({basket:'mytokens'})
-      console.log('Token list:')
-      console.log(tokenList);
-    } catch (error) {
-      console.error('Wallet connection error:', error)
-      setError('Please make sure BSV Desktop Wallet is running')
-      setLoading(false)
-    }
-  }
+  }, [wallet, identityKey, completionTxid])
 
   async function loadCampaignStatus() {
     try {
@@ -178,11 +154,6 @@ export default function Tokens() {
               {loading ? 'Connecting to wallet...' : 'Wallet not connected'}
             </p>
             {error && <p style={{ color: '#991b1b', fontSize: '14px' }}>{error}</p>}
-            {!loading && (
-              <button className={styles.btnPrimary} onClick={initWallet}>
-                Connect Wallet
-              </button>
-            )}
           </div>
         ) : loading ? (
           <div className={styles.statusCard}>
