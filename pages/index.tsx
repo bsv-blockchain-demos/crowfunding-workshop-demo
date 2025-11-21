@@ -34,7 +34,6 @@ export default function Home() {
   }, [])
 
   async function invest() {
-    console.time('invest')
     if (!wallet || !backendIdentityKey) {
       showMessage('Wallet not connected', 'error')
       return
@@ -52,44 +51,21 @@ export default function Home() {
 
       const { publicKey: investorKey } = await wallet.getPublicKey({ identityKey: true })
 
-      console.log('Making initial request to /api/invest...')
-
-      // Step 1: Make initial request (will receive 402 with derivation prefix)
       let response = await fetch('/api/invest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       })
 
-      // Step 2: If we get a 402, the middleware is asking for payment
       if (response.status === 402) {
         const derivationPrefix = response.headers.get('x-bsv-payment-derivation-prefix')
-        const satoshisRequired = response.headers.get('x-bsv-payment-satoshis-required')
-
-        console.log('402 Payment Required received:', {
-          derivationPrefix,
-          satoshisRequired,
-          investorWantsToSend: amount
-        })
 
         if (!derivationPrefix) {
           throw new Error('Missing payment derivation prefix from server')
         }
 
-        // Use the user's chosen amount, not the server's minimum
         const investmentAmount = amount
-
-        // Create derivation suffix
         const derivationSuffix = Utils.toBase64(Utils.toArray('investment' + Date.now(), 'utf8'))
 
-        console.log('Creating payment transaction:', {
-          investorKey,
-          backendIdentityKey,
-          derivationPrefix,
-          derivationSuffix,
-          amount: investmentAmount
-        })
-
-        // Derive the payment key using BRC-29
         const { publicKey: derivedPublicKey } = await wallet.getPublicKey({
           counterparty: backendIdentityKey,
           protocolID: brc29ProtocolID,
@@ -101,7 +77,6 @@ export default function Home() {
 
         showMessage(`Creating transaction for ${investmentAmount} sats...`, 'info')
 
-        // Create the payment transaction
         const result = await wallet.createAction({
           outputs: [{
             lockingScript,
@@ -109,28 +84,21 @@ export default function Home() {
             outputDescription: 'Crowdfunding investment'
           }],
           description: 'Investment in crowdfunding',
-          options: {
-            randomizeOutputs: false
-          }
+          options: { randomizeOutputs: false }
         })
-
-        console.log('Transaction created:', result.txid)
 
         if (!result.tx) {
           throw new Error('Transaction creation failed')
         }
 
-        // Step 3: Retry the request with payment header
-        // The middleware expects transaction as base64
         const paymentHeader = JSON.stringify({
           derivationPrefix,
           derivationSuffix,
-          transaction: Utils.toBase64(result.tx), // Must be base64-encoded
-          senderIdentityKey: investorKey, // Include for crowdfunding tracking
-          amount: investmentAmount // Include amount for price calculation
+          transaction: Utils.toBase64(result.tx),
+          senderIdentityKey: investorKey,
+          amount: investmentAmount
         })
 
-        console.log('Retrying request with payment...')
         showMessage('Sending payment to blockchain...', 'info')
 
         response = await fetch('/api/invest', {
@@ -145,7 +113,7 @@ export default function Home() {
       const data = await response.json()
 
       if (response.ok) {
-        showMessage(`✓ Investment successful! ${data.amount} sats received.`, 'success')
+        showMessage(`Investment successful! ${data.amount} sats received.`, 'success')
         await getStatus()
       } else {
         showMessage(data.error || 'Investment failed', 'error')
@@ -155,7 +123,6 @@ export default function Home() {
       showMessage('Error: ' + error.message, 'error')
     } finally {
       setLoading(false)
-      console.timeEnd('invest')
     }
   }
 
@@ -164,12 +131,13 @@ export default function Home() {
     setLoading(true)
 
     try {
-      showMessage('Distributing PushDrop tokens...', 'info')
+      showMessage('Claiming token...', 'info')
 
       if (!wallet) {
         showMessage('Wallet not connected', 'error')
         return
       }
+
       const { publicKey: investorKey } = await wallet.getPublicKey({ identityKey: true })
 
       const derivationPrefix = Utils.toBase64(Random(8))
@@ -191,30 +159,19 @@ export default function Home() {
       const data = await response.json()
 
       if (response.ok) {
-        // Only internalize if the API call was successful
-        const internalizeResult = await wallet.internalizeAction({
+        await wallet.internalizeAction({
           tx: data.tx,
           outputs: [
             {
               outputIndex: 0,
               protocol: 'basket insertion',
-              insertionRemittance:{
-                basket:'crowdfunding',
-              }
+              insertionRemittance: { basket: 'crowdfunding' }
             }
           ],
-          description: 'internalize token'
+          description: 'Internalize crowdfunding token'
         })
 
-        console.log('Internalize result:', internalizeResult)
-
-        showMessage(
-          `Success! Tokens distributed to ${data.investorCount} investors.\n\n` +
-          `⚠️ IMPORTANT - Save this TXID to find your tokens:\n${data.txid}\n\n` +
-          `PushDrop tokens use P2PK and cannot be found by address.\n` +
-          `View transaction: https://whatsonchain.com/tx/${data.txid}`,
-          'success'
-        )
+        showMessage(`Token claimed successfully! TXID: ${data.txid}`, 'success')
         await getStatus()
       } else {
         showMessage(data.error || 'Failed to complete', 'error')
@@ -222,7 +179,6 @@ export default function Home() {
     } catch (error: any) {
       console.error('Complete error:', error)
 
-      // Retry on network or temporary errors
       if (retryCount < maxRetries) {
         showMessage(`Connection error, retrying... (${retryCount + 1}/${maxRetries})`, 'info')
         await new Promise(resolve => setTimeout(resolve, 2000))
@@ -295,7 +251,7 @@ export default function Home() {
 
               <div className={styles.stat}>
                 <span>Status:</span>
-                <span>{status.isComplete ? '✅ FUNDED' : 'Active'}</span>
+                <span>{status.isComplete ? 'FUNDED' : 'Active'}</span>
               </div>
 
               {status.isComplete && status.completionTxid && (
@@ -353,13 +309,13 @@ export default function Home() {
                 onClick={() => complete()}
                 disabled={loading}
               >
-                {loading ? 'Distributing...' : 'Claim Tokens'}
+                {loading ? 'Claiming...' : 'Claim Tokens'}
               </button>
             )}
 
             <Link href="/tokens">
               <button className={styles.btnPrimary} style={{ marginTop: '10px' }}>
-                View My PushDrop Tokens
+                View My Tokens
               </button>
             </Link>
           </>

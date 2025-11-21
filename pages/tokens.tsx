@@ -34,25 +34,15 @@ export default function Tokens() {
     if (wallet && identityKey) {
       loadTokens()
     }
-  }, [wallet, identityKey])
+  }, [wallet, identityKey, completionTxid])
 
   async function loadCampaignStatus() {
     try {
       const response = await fetch('/api/status')
       if (response.ok) {
         const data = await response.json()
-        console.log('Campaign status:', data)
-
         if (data.completionTxid) {
           setCompletionTxid(data.completionTxid)
-          console.log('✅ Completion TXID loaded:', data.completionTxid)
-        } else {
-          console.log('⚠️ No completion TXID found in campaign status')
-          if (data.isComplete) {
-            console.log('Campaign is complete but TXID was not saved (completed before this feature was added)')
-          } else {
-            console.log('Campaign is not yet complete')
-          }
         }
       }
     } catch (err) {
@@ -71,30 +61,23 @@ export default function Tokens() {
     setError('')
 
     try {
-      // List outputs from the crowdfunding basket
       const outputs = await wallet.listOutputs({
         basket: 'crowdfunding',
         include: 'locking scripts'
       })
 
-      console.log('Wallet outputs from crowdfunding basket:', outputs)
-
       const tokens: WalletToken[] = []
 
       for (const output of outputs.outputs) {
         try {
-          if (!output.lockingScript) {
-            console.log('Output has no locking script, skipping')
-            continue
-          }
-          // Convert hex string to LockingScript and decode
+          if (!output.lockingScript) continue
+
           const script = LockingScript.fromHex(output.lockingScript)
           const decodedToken = PushDrop.decode(script)
 
           let decryptedData = ''
           if (decodedToken.fields && decodedToken.fields.length > 0) {
             try {
-              // Try to decrypt the token data
               const { plaintext } = await wallet.decrypt({
                 ciphertext: decodedToken.fields[0],
                 protocolID: [0, 'token list'],
@@ -102,19 +85,14 @@ export default function Tokens() {
                 counterparty: 'self'
               })
               decryptedData = Utils.toUTF8(plaintext)
-            } catch (decryptErr) {
-              console.log('Could not decrypt token data:', decryptErr)
+            } catch {
               decryptedData = '(encrypted)'
             }
           }
 
           const txid = output.outpoint.split('.')[0]
 
-          // Only include tokens from the current campaign's completion transaction
-          if (completionTxid && txid !== completionTxid) {
-            console.log(`Skipping token from different campaign: ${txid}`)
-            continue
-          }
+          if (completionTxid && txid !== completionTxid) continue
 
           tokens.push({
             txid,
@@ -124,8 +102,8 @@ export default function Tokens() {
             decryptedData,
             outpoint: output.outpoint
           })
-        } catch (decodeErr) {
-          console.log('Could not decode as PushDrop:', decodeErr)
+        } catch {
+          // Skip non-PushDrop outputs
         }
       }
 
@@ -136,7 +114,7 @@ export default function Tokens() {
       })
 
       if (tokens.length === 0) {
-        setError('No tokens found in your wallet. Complete a crowdfunding campaign to receive tokens.')
+        setError('No tokens found. Complete a crowdfunding campaign to receive tokens.')
       }
     } catch (err: any) {
       console.error('Error loading tokens:', err)
@@ -158,19 +136,16 @@ export default function Tokens() {
         <div className={styles.header}>
           <div>
             <h1>PushDrop Tokens</h1>
-            <p className={styles.subtitle}>View expedited push drop tokens received</p>
+            <p className={styles.subtitle}>View your crowdfunding tokens</p>
           </div>
           <Link href="/" className={styles.backLink}>
-            ← Back to Crowdfunding
+            ← Back
           </Link>
         </div>
 
         {!isWalletConnected ? (
           <div className={styles.statusCard}>
-            <p style={{ marginBottom: '10px' }}>
-              {loading ? 'Connecting to wallet...' : 'Wallet not connected'}
-            </p>
-            {error && <p style={{ color: '#991b1b', fontSize: '14px' }}>{error}</p>}
+            <p>{loading ? 'Connecting to wallet...' : 'Wallet not connected'}</p>
           </div>
         ) : loading ? (
           <div className={styles.statusCard}>
@@ -181,18 +156,9 @@ export default function Tokens() {
             <p style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#92400e', fontWeight: 'bold' }}>
               {error}
             </p>
-            <p style={{ margin: '0 0 10px 0', fontSize: '12px', color: '#92400e' }}>
-              <strong>To view PushDrop tokens:</strong>
-              <br />
-              1. Complete a crowdfunding campaign
-              <br />
-              2. The completion transaction TXID will be saved automatically
-              <br />
-              3. Tokens will appear here automatically
-            </p>
             <Link href="/">
               <button className={styles.btnPrimary}>
-                ← Go to Crowdfunding Page
+                ← Go to Crowdfunding
               </button>
             </Link>
           </div>
@@ -204,7 +170,7 @@ export default function Tokens() {
                 <span className={styles.identityKey}>{formatTxid(tokensData.identityKey)}</span>
               </div>
               <div className={styles.stat}>
-                <span>Your PushDrop Tokens:</span>
+                <span>Your Tokens:</span>
                 <span style={{ color: tokensData.tokenCount > 0 ? '#10b981' : '#991b1b', fontWeight: 'bold' }}>
                   {tokensData.tokenCount}
                 </span>
@@ -218,17 +184,10 @@ export default function Tokens() {
                   <div
                     key={idx}
                     className={styles.tokenItem}
-                    style={{
-                      borderColor: '#10b981',
-                      borderWidth: '3px'
-                    }}
+                    style={{ borderColor: '#10b981', borderWidth: '3px' }}
                   >
                     <div className={styles.tokenHeader}>
-                      <div>
-                        <span className={styles.tokenLabel}>
-                          Token #{idx + 1}
-                        </span>
-                      </div>
+                      <span className={styles.tokenLabel}>Token #{idx + 1}</span>
                       <span className={styles.tokenSats}>{token.satoshis} sats</span>
                     </div>
                     <div className={styles.tokenDetails}>
@@ -244,12 +203,12 @@ export default function Tokens() {
                         </a>
                       </div>
                       <div className={styles.tokenField}>
-                        <span className={styles.fieldLabel}>Output Index:</span>
+                        <span className={styles.fieldLabel}>Output:</span>
                         <span>#{token.vout}</span>
                       </div>
                       {token.decryptedData && (
                         <div className={styles.tokenField} style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-                          <span className={styles.fieldLabel}>Token Data:</span>
+                          <span className={styles.fieldLabel}>Data:</span>
                           <span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#065f46', marginTop: '4px' }}>
                             {token.decryptedData}
                           </span>
@@ -261,35 +220,17 @@ export default function Tokens() {
               </div>
             ) : (
               <div className={styles.statusCard}>
-                <p>No tokens found in your wallet yet.</p>
-                <p className={styles.subtitle}>Complete a crowdfunding campaign to receive tokens.</p>
+                <p>No tokens found yet.</p>
               </div>
             )}
 
             <button
               className={styles.btnPrimary}
               onClick={loadTokens}
-              disabled={loading || !wallet}
+              disabled={loading}
             >
-              {loading ? 'Refreshing...' : 'Refresh Tokens'}
+              {loading ? 'Refreshing...' : 'Refresh'}
             </button>
-
-            <div className={styles.statusCard} style={{ marginTop: '20px', background: '#d1fae5', borderLeft: '4px solid #10b981' }}>
-              <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#065f46', fontWeight: 'bold' }}>
-                How This Works
-              </p>
-              <p style={{ margin: 0, fontSize: '12px', color: '#065f46' }}>
-                <strong>Tokens are stored in your wallet's "crowdfunding" basket</strong>
-                <br /><br />
-                - When you claim tokens, they are internalized into your wallet
-                <br />
-                - Tokens use PushDrop locking scripts with encrypted data
-                <br />
-                - Your wallet can spend them because it controls the keys
-                <br />
-                - Token data is decrypted using your wallet's keys
-              </p>
-            </div>
           </>
         ) : null}
       </div>
