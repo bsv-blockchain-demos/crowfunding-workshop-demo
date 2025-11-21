@@ -40,10 +40,8 @@ export default function Home() {
       const w = new WalletClient()
       setWallet(w)
       console.log('Wallet connected')
-      showMessage('Wallet connected successfully!', 'success')
     } catch (error: any) {
       console.error('Wallet connection error:', error)
-      showMessage('Please make sure BSV Desktop Wallet is running and try again', 'error')
     } finally {
       setLoading(false)
     }

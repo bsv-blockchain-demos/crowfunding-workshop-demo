@@ -3,12 +3,12 @@ import {
   PaymentRequest,
   runMiddleware,
   getAuthMiddleware,
-  getPaymentMiddleware,
-  getWalletInstance
+  getPaymentMiddleware
 } from '../../lib/middleware'
 import { crowdfunding } from '../../lib/crowdfunding'
 import { saveCrowdfundingData } from '../../lib/storage'
 import { Investor } from '../../src/types'
+import { wallet } from '../../src/wallet'
 
 export default async function handler(req: PaymentRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -98,7 +98,6 @@ export default async function handler(req: PaymentRequest, res: NextApiResponse)
     console.log(`Total investors: ${crowdfunding.investors.length}, Total raised: ${crowdfunding.raised} sats`)
 
     // Get wallet identity and save to disk
-    const wallet = await getWalletInstance()
     const identityKey = await wallet.getPublicKey({ identityKey: true })
     saveCrowdfundingData(identityKey.publicKey, crowdfunding)
 

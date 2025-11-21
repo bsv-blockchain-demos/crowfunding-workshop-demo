@@ -1,10 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { initializeBackendWallet } from '../../src/wallet'
+import { wallet } from '../../src/wallet'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    const wallet = await initializeBackendWallet()
-
     // Get wallet balance from UTXOs
     const result = await wallet.listOutputs({
       basket: 'default',

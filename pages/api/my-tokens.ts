@@ -1,5 +1,4 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { PublicKey } from '@bsv/sdk'
 
 interface PushDropTokenOutput {
   txid: string

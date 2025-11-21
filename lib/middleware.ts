@@ -1,7 +1,6 @@
-import { WalletInterface } from '@bsv/sdk'
-import { initializeBackendWallet } from '../src/wallet'
+import { wallet } from '../src/wallet'
 import { NextApiRequest, NextApiResponse } from 'next'
-import { createAuthMiddleware, AuthRequest } from '@bsv/auth-express-middleware'
+import { createAuthMiddleware } from '@bsv/auth-express-middleware'
 import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
 import { Request, Response, NextFunction } from 'express'
 
@@ -17,14 +16,6 @@ export interface PaymentRequest extends NextApiRequest {
   auth?: {
     identityKey: string
   }
-}
-
-// Cache the wallet instance to avoid re-initialization
-let walletInstance: WalletInterface | null = null
-
-export async function getWalletInstance(): Promise<WalletInterface> {
-  walletInstance ??= await initializeBackendWallet()
-  return walletInstance
 }
 
 // Price calculator for payment middleware
@@ -107,15 +98,12 @@ export function runMiddleware(
 let authMiddlewareInstance: ((req: Request, res: Response, next: NextFunction) => void) | null = null
 
 export async function getAuthMiddleware() {
-  if (!authMiddlewareInstance) {
-    const wallet = await getWalletInstance()
-    authMiddlewareInstance = createAuthMiddleware({
+  authMiddlewareInstance ??= createAuthMiddleware({
       wallet,
       allowUnauthenticated: true, // Allow unauthenticated - we'll get identity from payment
       logger: console,
       logLevel: 'info'
     })
-  }
   return authMiddlewareInstance
 }
 
@@ -123,12 +111,9 @@ export async function getAuthMiddleware() {
 let paymentMiddlewareInstance: ((req: Request, res: Response, next: NextFunction) => Promise<void>) | null = null
 
 export async function getPaymentMiddleware() {
-  if (!paymentMiddlewareInstance) {
-    const wallet = await getWalletInstance()
-    paymentMiddlewareInstance = createPaymentMiddleware({
+  paymentMiddlewareInstance ??= createPaymentMiddleware({
       wallet,
       calculateRequestPrice: calculateInvestmentPrice
     })
-  }
   return paymentMiddlewareInstance
 }

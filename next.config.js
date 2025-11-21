@@ -7,13 +7,13 @@ const nextConfig = {
       'utf-8-validate': 'commonjs utf-8-validate',
       'bufferutil': 'commonjs bufferutil',
     });
-    return config;
-  },
-  webpackDevMiddleware: config => {
+
+    // Configure watch options for development
     config.watchOptions = {
       poll: 1000, // revisa cambios cada segundo
       aggregateTimeout: 300,
     };
+
     return config;
   },
 }
