@@ -2,34 +2,21 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import styles from '../styles/Home.module.css'
 import { useWallet } from '../lib/wallet'
+import { PushDrop, Utils, LockingScript } from '@bsv/sdk'
 
-interface PushDropToken {
+interface WalletToken {
   txid: string
   vout: number
   satoshis: number
-  scriptPubKey: string
-  scriptAsm: string
-  height?: number
-  confirmations?: number
-  time?: number
-  address?: string
-  type?: string
-  isPushDrop: boolean
-  publicKey?: string
-  encryptedData?: string
+  lockingScript: string
+  decryptedData?: string
+  outpoint: string
 }
 
 interface TokensData {
   identityKey: string
-  completionTxid: string
   tokenCount: number
-  allTokenCount: number
-  tokens: PushDropToken[]
-  txLink: string
-  address?: string
-  totalUtxos?: number
-  totalTransactions?: number
-  warning?: string
+  tokens: WalletToken[]
 }
 
 export default function Tokens() {
@@ -44,16 +31,10 @@ export default function Tokens() {
   }, [])
 
   useEffect(() => {
-    if (identityKey) {
-      if (completionTxid) {
-        loadTokens()
-      } else {
-        // No completion TXID available yet
-        setLoading(false)
-        setError('Campaign not yet completed or completion TXID not saved. Complete a crowdfunding campaign to view tokens.')
-      }
+    if (wallet && identityKey) {
+      loadTokens()
     }
-  }, [wallet, identityKey, completionTxid])
+  }, [wallet, identityKey])
 
   async function loadCampaignStatus() {
     try {
@@ -80,14 +61,8 @@ export default function Tokens() {
   }
 
   async function loadTokens() {
-    if (!identityKey) {
-      setError('No identity key available')
-      setLoading(false)
-      return
-    }
-
-    if (!completionTxid) {
-      setError('No completion transaction found. The campaign may not be completed yet.')
+    if (!wallet || !identityKey) {
+      setError('Wallet not connected')
       setLoading(false)
       return
     }
@@ -96,15 +71,72 @@ export default function Tokens() {
     setError('')
 
     try {
-      const response = await fetch(
-        `/api/my-tokens?identityKey=${encodeURIComponent(identityKey)}&completionTxid=${encodeURIComponent(completionTxid)}`
-      )
-      const data = await response.json()
+      // List outputs from the crowdfunding basket
+      const outputs = await wallet.listOutputs({
+        basket: 'crowdfunding',
+        include: 'locking scripts'
+      })
 
-      if (response.ok) {
-        setTokensData(data)
-      } else {
-        setError(data.error || 'Failed to load tokens')
+      console.log('Wallet outputs from crowdfunding basket:', outputs)
+
+      const tokens: WalletToken[] = []
+
+      for (const output of outputs.outputs) {
+        try {
+          if (!output.lockingScript) {
+            console.log('Output has no locking script, skipping')
+            continue
+          }
+          // Convert hex string to LockingScript and decode
+          const script = LockingScript.fromHex(output.lockingScript)
+          const decodedToken = PushDrop.decode(script)
+
+          let decryptedData = ''
+          if (decodedToken.fields && decodedToken.fields.length > 0) {
+            try {
+              // Try to decrypt the token data
+              const { plaintext } = await wallet.decrypt({
+                ciphertext: decodedToken.fields[0],
+                protocolID: [0, 'token list'],
+                keyID: '1',
+                counterparty: 'self'
+              })
+              decryptedData = Utils.toUTF8(plaintext)
+            } catch (decryptErr) {
+              console.log('Could not decrypt token data:', decryptErr)
+              decryptedData = '(encrypted)'
+            }
+          }
+
+          const txid = output.outpoint.split('.')[0]
+
+          // Only include tokens from the current campaign's completion transaction
+          if (completionTxid && txid !== completionTxid) {
+            console.log(`Skipping token from different campaign: ${txid}`)
+            continue
+          }
+
+          tokens.push({
+            txid,
+            vout: parseInt(output.outpoint.split('.')[1]),
+            satoshis: output.satoshis,
+            lockingScript: output.lockingScript,
+            decryptedData,
+            outpoint: output.outpoint
+          })
+        } catch (decodeErr) {
+          console.log('Could not decode as PushDrop:', decodeErr)
+        }
+      }
+
+      setTokensData({
+        identityKey,
+        tokenCount: tokens.length,
+        tokens
+      })
+
+      if (tokens.length === 0) {
+        setError('No tokens found in your wallet. Complete a crowdfunding campaign to receive tokens.')
       }
     } catch (err: any) {
       console.error('Error loading tokens:', err)
@@ -116,21 +148,6 @@ export default function Tokens() {
 
   function formatTxid(txid: string) {
     return `${txid.slice(0, 8)}...${txid.slice(-8)}`
-  }
-
-  function formatDate(timestamp: number) {
-    if (!timestamp) return 'Unknown'
-    const date = new Date(timestamp * 1000)
-    return date.toLocaleString()
-  }
-
-  function formatScript(scriptAsm: string) {
-    if (!scriptAsm) return 'N/A'
-    // Truncate long scripts
-    if (scriptAsm.length > 100) {
-      return scriptAsm.slice(0, 100) + '...'
-    }
-    return scriptAsm
   }
 
   const isWalletConnected = wallet && identityKey
@@ -187,79 +204,54 @@ export default function Tokens() {
                 <span className={styles.identityKey}>{formatTxid(tokensData.identityKey)}</span>
               </div>
               <div className={styles.stat}>
-                <span>Completion TX:</span>
-                <a
-                  href={tokensData.txLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={styles.txidLink}
-                >
-                  {formatTxid(tokensData.completionTxid)}
-                </a>
-              </div>
-              <div className={styles.stat}>
                 <span>Your PushDrop Tokens:</span>
                 <span style={{ color: tokensData.tokenCount > 0 ? '#10b981' : '#991b1b', fontWeight: 'bold' }}>
                   {tokensData.tokenCount}
                 </span>
               </div>
-              <div className={styles.stat}>
-                <span>Total Token Outputs:</span>
-                <span>{tokensData.allTokenCount}</span>
-              </div>
             </div>
 
             {tokensData.tokens.length > 0 ? (
               <div className={styles.investorList}>
-                <h3>PushDrop Token Outputs ({tokensData.tokens.length})</h3>
+                <h3>Your Tokens ({tokensData.tokens.length})</h3>
                 {tokensData.tokens.map((token, idx) => (
                   <div
                     key={idx}
                     className={styles.tokenItem}
                     style={{
-                      borderColor: token.isPushDrop ? '#10b981' : '#f59e0b',
+                      borderColor: '#10b981',
                       borderWidth: '3px'
                     }}
                   >
                     <div className={styles.tokenHeader}>
                       <div>
                         <span className={styles.tokenLabel}>
-                          {token.isPushDrop ? '✅ Your Token' : '⚠️ Other Token'} (Output #{token.vout})
+                          Token #{idx + 1}
                         </span>
                       </div>
                       <span className={styles.tokenSats}>{token.satoshis} sats</span>
                     </div>
                     <div className={styles.tokenDetails}>
-                      {token.publicKey && (
-                        <div className={styles.tokenField} style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-                          <span className={styles.fieldLabel}>Locked to Public Key:</span>
-                          <span style={{ fontFamily: 'monospace', fontSize: '11px', color: '#667eea', wordBreak: 'break-all', marginTop: '4px', fontWeight: 'bold' }}>
-                            {token.publicKey}
-                          </span>
-                          {token.publicKey === identityKey && (
-                            <span style={{ fontSize: '12px', color: '#10b981', marginTop: '4px' }}>
-                              ✅ This matches YOUR identity key - you can spend this token!
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      {token.encryptedData && (
-                        <div className={styles.tokenField} style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-                          <span className={styles.fieldLabel}>Encrypted Token Data:</span>
-                          <span style={{ fontFamily: 'monospace', fontSize: '10px', color: '#666', wordBreak: 'break-all', marginTop: '4px' }}>
-                            {token.encryptedData.slice(0, 100)}...
-                          </span>
-                        </div>
-                      )}
+                      <div className={styles.tokenField}>
+                        <span className={styles.fieldLabel}>TXID:</span>
+                        <a
+                          href={`https://whatsonchain.com/tx/${token.txid}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: '#667eea', fontFamily: 'monospace', fontSize: '11px' }}
+                        >
+                          {formatTxid(token.txid)}
+                        </a>
+                      </div>
                       <div className={styles.tokenField}>
                         <span className={styles.fieldLabel}>Output Index:</span>
                         <span>#{token.vout}</span>
                       </div>
-                      {token.scriptAsm && (
+                      {token.decryptedData && (
                         <div className={styles.tokenField} style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-                          <span className={styles.fieldLabel}>Full Script (ASM):</span>
-                          <span style={{ fontFamily: 'monospace', fontSize: '10px', color: '#666', wordBreak: 'break-all', marginTop: '4px' }}>
-                            {formatScript(token.scriptAsm)}
+                          <span className={styles.fieldLabel}>Token Data:</span>
+                          <span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#065f46', marginTop: '4px' }}>
+                            {token.decryptedData}
                           </span>
                         </div>
                       )}
@@ -269,39 +261,33 @@ export default function Tokens() {
               </div>
             ) : (
               <div className={styles.statusCard}>
-                <p>No PushDrop tokens found in the completion transaction.</p>
-                <p className={styles.subtitle}>This shouldn't happen if the campaign was completed successfully.</p>
+                <p>No tokens found in your wallet yet.</p>
+                <p className={styles.subtitle}>Complete a crowdfunding campaign to receive tokens.</p>
               </div>
             )}
 
             <button
               className={styles.btnPrimary}
               onClick={loadTokens}
-              disabled={loading || !identityKey}
+              disabled={loading || !wallet}
             >
               {loading ? 'Refreshing...' : 'Refresh Tokens'}
             </button>
 
             <div className={styles.statusCard} style={{ marginTop: '20px', background: '#d1fae5', borderLeft: '4px solid #10b981' }}>
               <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#065f46', fontWeight: 'bold' }}>
-                ✅ How This Works
+                How This Works
               </p>
               <p style={{ margin: 0, fontSize: '12px', color: '#065f46' }}>
-                <strong>PushDrop tokens are found from the completion transaction!</strong>
+                <strong>Tokens are stored in your wallet's "crowdfunding" basket</strong>
                 <br /><br />
-                • When a campaign completes, 1-satoshi tokens are sent to each investor
+                - When you claim tokens, they are internalized into your wallet
                 <br />
-                • Tokens use <strong>P2PK</strong> (Pay-to-Public-Key) locking scripts
+                - Tokens use PushDrop locking scripts with encrypted data
                 <br />
-                • Each token is locked to your <strong>public key</strong> (not a hash/address)
+                - Your wallet can spend them because it controls the keys
                 <br />
-                • Your wallet can spend them because it controls the private key
-                <br />
-                • Tokens contain <strong>encrypted investment data</strong>
-                <br /><br />
-                <strong>Green border = Your token</strong> (public key matches yours)
-                <br />
-                <strong>Orange border = Other investor's token</strong>
+                - Token data is decrypted using your wallet's keys
               </p>
             </div>
           </>

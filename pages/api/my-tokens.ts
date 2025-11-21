@@ -35,10 +35,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const txResponse = await fetch(`https://api.whatsonchain.com/v1/bsv/${network}/tx/${completionTxid}`)
 
     if (!txResponse.ok) {
-      throw new Error(`Failed to fetch completion transaction: ${txResponse.status}`)
+      const errorText = await txResponse.text()
+      console.error('WhatsOnChain error:', txResponse.status, errorText)
+
+      if (txResponse.status === 404) {
+        throw new Error(`Transaction not found on blockchain. It may not be indexed yet - please wait a few minutes and try again.`)
+      }
+      throw new Error(`Failed to fetch completion transaction: ${txResponse.status} - ${errorText}`)
     }
 
     const txData = await txResponse.json()
+
+    if (!txData.vout || !Array.isArray(txData.vout)) {
+      console.error('Unexpected transaction format:', txData)
+      throw new Error('Invalid transaction format received from WhatsOnChain')
+    }
     console.log(`Transaction has ${txData.vout.length} outputs`)
 
     const pushDropTokens: PushDropTokenOutput[] = []

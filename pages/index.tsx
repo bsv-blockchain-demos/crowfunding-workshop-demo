@@ -190,23 +190,24 @@ export default function Home() {
 
       const data = await response.json()
 
-      const internalizeResult = await wallet.internalizeAction({
-        tx: data.tx,
-        outputs: [
-          {
-            outputIndex: 0,
-            protocol: 'basket insertion',
-            insertionRemittance:{
-              basket:'crowdfunding',
-            }
-          }
-        ],
-        description: 'internalize token'
-      })
-
-      console.log(internalizeResult)
-
       if (response.ok) {
+        // Only internalize if the API call was successful
+        const internalizeResult = await wallet.internalizeAction({
+          tx: data.tx,
+          outputs: [
+            {
+              outputIndex: 0,
+              protocol: 'basket insertion',
+              insertionRemittance:{
+                basket:'crowdfunding',
+              }
+            }
+          ],
+          description: 'internalize token'
+        })
+
+        console.log('Internalize result:', internalizeResult)
+
         showMessage(
           `Success! Tokens distributed to ${data.investorCount} investors.\n\n` +
           `⚠️ IMPORTANT - Save this TXID to find your tokens:\n${data.txid}\n\n` +

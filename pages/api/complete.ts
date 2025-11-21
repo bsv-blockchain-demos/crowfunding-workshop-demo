@@ -1,12 +1,18 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { wallet } from '../../src/wallet'
-import { crowdfunding } from '../../lib/crowdfunding'
+import { crowdfunding, setCrowdfundingState } from '../../lib/crowdfunding'
+import { saveCrowdfundingData, loadCrowdfundingData } from '../../lib/storage'
 import { PushDrop, Utils } from '@bsv/sdk'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
+
+  // Load the latest crowdfunding state from disk
+  const walletIdentity = await wallet.getPublicKey({ identityKey: true })
+  const loadedState = loadCrowdfundingData(walletIdentity.publicKey)
+  setCrowdfundingState(loadedState)
 
   const { identityKey, paymentKey } = req.body
 
@@ -101,18 +107,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const identityKey = await wallet.getPublicKey({ identityKey: true })
     saveCrowdfundingData(identityKey.publicKey, crowdfunding) */
 
-    const tokenDescription ='token to redeem';
+    const tokenDescription = `Crowdfunding token for ${investor.amount} sats`;
     const pushdrop = new PushDrop(wallet);
     const { ciphertext } = await wallet.encrypt({
       plaintext: Utils.toArray(tokenDescription, 'utf8'),
       protocolID: [0, 'token list'],
-      keyID: '1'
+      keyID: '1',
+      counterparty: identityKey // Encrypt for the investor
     })
     const lockingScript = await pushdrop.lock(
       [ciphertext], // Token field 0: encrypted task text
       [0, 'token list'], // Protocol ID
       '1', // Key ID
-      'anyone' // Recipient
+      identityKey // Lock to investor's public key
     )
 
     const result = await wallet.createAction({
@@ -132,15 +139,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log(`✅ Completion transaction saved: ${result?.txid}`)
 
+    // Mark investor as redeemed
+    investor.redeemed = true
+
+    // Get wallet identity and save the updated state
     const senderIdentity = await wallet.getPublicKey({ identityKey: true })
+    saveCrowdfundingData(senderIdentity.publicKey, crowdfunding)
+
+    // Check if all investors have redeemed
+    const allRedeemed = crowdfunding.investors.every(inv => inv.redeemed)
+    if (allRedeemed) {
+      crowdfunding.isComplete = true
+      crowdfunding.completionTxid = result?.txid
+      saveCrowdfundingData(senderIdentity.publicKey, crowdfunding)
+    }
 
     res.status(200).json({
       success: true,
       senderIdentity: senderIdentity.publicKey,
-      message: 'Tokens distributed to all investors!',
+      message: 'Token distributed to investor!',
       txid: result?.txid || 'unknown',
-      tx:result.tx,
-      investorCount: crowdfunding.investors.length
+      tx: result.tx,
+      investorCount: crowdfunding.investors.length,
+      allRedeemed
     })
   } catch (error: any) {
     console.error('Complete error:', error)
