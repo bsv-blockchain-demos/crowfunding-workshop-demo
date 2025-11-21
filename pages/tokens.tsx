@@ -68,6 +68,10 @@ export default function Tokens() {
       const { publicKey: investorKey } = await w.getPublicKey({ identityKey: true })
       setIdentityKey(investorKey)
       console.log('Investor Wallet connected, Identity Key:', investorKey)
+
+      const tokenList = await wallet?.listOutputs({basket:'mytokens'})
+      console.log('Token list:')
+      console.log(tokenList);
     } catch (error) {
       console.error('Wallet connection error:', error)
       setError('Please make sure BSV Desktop Wallet is running')
