@@ -23,9 +23,7 @@ export interface PaymentRequest extends NextApiRequest {
 let walletInstance: WalletInterface | null = null
 
 export async function getWalletInstance(): Promise<WalletInterface> {
-  if (!walletInstance) {
-    walletInstance = await initializeBackendWallet()
-  }
+  walletInstance ??= await initializeBackendWallet()
   return walletInstance
 }
 
@@ -45,6 +43,7 @@ export function calculateInvestmentPrice(req: any): number {
       }
     } catch (e) {
       // Failed to parse, fall back to minimum
+      console.error('Failed to parse payment header:', e)
     }
   }
 

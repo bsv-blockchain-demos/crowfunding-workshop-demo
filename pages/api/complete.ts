@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { initializeBackendWallet } from '../../src/wallet'
+import { wallet } from '../../src/wallet'
 import { createInvestorToken } from '../../src/pushdrop'
 import { crowdfunding } from '../../lib/crowdfunding'
 import { saveCrowdfundingData } from '../../lib/storage'
@@ -46,8 +46,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const wallet = await initializeBackendWallet()
-
     console.log('Distributing tokens to investors:', crowdfunding.investors)
 
     /* // Create transaction with PushDrop tokens for each investor

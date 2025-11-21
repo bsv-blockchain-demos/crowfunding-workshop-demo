@@ -1,3 +1,4 @@
+'use client'
 import { useState, useEffect } from 'react'
 import { WalletClient, P2PKH, PublicKey, Utils, WalletProtocol } from '@bsv/sdk'
 import Link from 'next/link'
@@ -21,68 +22,41 @@ export default function Home() {
   const [messageType, setMessageType] = useState('')
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    initWallet()
-    loadStatus()
-    const interval = setInterval(loadStatus, 5000)
-    return () => clearInterval(interval)
-  }, [])
-
-  async function initWallet(retryCount = 0) {
-    const maxRetries = 3
-    try {
-      setLoading(true)
-      const w = new WalletClient('json-api', 'localhost')
-
-      // Add timeout to connection attempt
-      const connectionPromise = w.connectToSubstrate()
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Connection timeout')), 10000)
-      )
-
-      await Promise.race([connectionPromise, timeoutPromise])
-
-      // Set wallet immediately to show UI
-      setWallet(w)
-      console.log('Wallet connected')
-      showMessage('Wallet connected successfully!', 'success')
-
-      // Load wallet info and status in parallel (non-blocking for UI)
-      Promise.all([
-        fetch('/api/wallet-info'),
-        fetch('/api/status')
-      ]).then(async ([walletInfoResponse, statusResponse]) => {
-        const walletData = await walletInfoResponse.json()
-        const statusData = await statusResponse.json()
-
-        setBackendIdentityKey(walletData.identityKey)
-        setStatus(statusData)
-      }).catch(err => {
-        console.error('Failed to load wallet info/status:', err)
-      })
-    } catch (error: any) {
-      console.error('Wallet connection error:', error)
-
-      if (retryCount < maxRetries) {
-        const retryDelay = 1000 * (retryCount + 1) // Increasing delay
-        showMessage(`Connecting to wallet... (attempt ${retryCount + 1}/${maxRetries})`, 'info')
-        await new Promise(resolve => setTimeout(resolve, retryDelay))
-        return initWallet(retryCount + 1)
-      } else {
-        showMessage('Please make sure BSV Desktop Wallet is running and try again', 'error')
-      }
-    } finally {
-      setLoading(false)
-    }
+  async function getWalletInfo() {
+    const response = await fetch('/api/wallet-info')
+    const data = await response.json()
+    setBackendIdentityKey(data.identityKey)
   }
 
-  async function loadStatus() {
+  async function getStatus() {
     const response = await fetch('/api/status')
     const data = await response.json()
     setStatus(data)
   }
 
+  async function initWallet() {
+    try {
+      setLoading(true)
+      const w = new WalletClient()
+      setWallet(w)
+      console.log('Wallet connected')
+      showMessage('Wallet connected successfully!', 'success')
+    } catch (error: any) {
+      console.error('Wallet connection error:', error)
+      showMessage('Please make sure BSV Desktop Wallet is running and try again', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    initWallet()
+    getWalletInfo()
+    getStatus()
+  }, [])
+
   async function invest() {
+    console.time('invest')
     if (!wallet || !backendIdentityKey) {
       showMessage('Wallet not connected', 'error')
       return
@@ -194,7 +168,7 @@ export default function Home() {
 
       if (response.ok) {
         showMessage(`✓ Investment successful! ${data.amount} sats received.`, 'success')
-        await loadStatus()
+        await getStatus()
       } else {
         showMessage(data.error || 'Investment failed', 'error')
       }
@@ -203,6 +177,7 @@ export default function Home() {
       showMessage('Error: ' + error.message, 'error')
     } finally {
       setLoading(false)
+      console.timeEnd('invest')
     }
   }
 

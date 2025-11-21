@@ -1,13 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { crowdfunding, setCrowdfundingState } from '../../lib/crowdfunding'
-import { initializeBackendWallet } from '../../src/wallet'
+import { wallet } from '../../src/wallet'
 import { loadCrowdfundingData } from '../../lib/storage'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     // Load crowdfunding state
     try {
-      const wallet = await initializeBackendWallet()
       const identityKey = await wallet.getPublicKey({ identityKey: true })
 
       // Load crowdfunding state for this wallet
