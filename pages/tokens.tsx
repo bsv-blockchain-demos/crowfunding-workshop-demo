@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import styles from '../styles/Home.module.css'
 import { useWallet } from '../lib/wallet'
-import { PushDrop, Utils, LockingScript } from '@bsv/sdk'
+import { PushDrop, LockingScript } from '@bsv/sdk'
 
 interface WalletToken {
   txid: string
@@ -77,17 +77,9 @@ export default function Tokens() {
 
           let decryptedData = ''
           if (decodedToken.fields && decodedToken.fields.length > 0) {
-            try {
-              const { plaintext } = await wallet.decrypt({
-                ciphertext: decodedToken.fields[0],
-                protocolID: [0, 'token list'],
-                keyID: '1',
-                counterparty: 'self'
-              })
-              decryptedData = Utils.toUTF8(plaintext)
-            } catch {
-              decryptedData = '(encrypted)'
-            }
+            // Skip decryption for now - tokens contain encrypted data
+            // that requires matching encryption parameters
+            decryptedData = `Token data (${decodedToken.fields[0].length} bytes)`
           }
 
           const txid = output.outpoint.split('.')[0]

@@ -51,7 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       plaintext: Utils.toArray(tokenDescription, 'utf8'),
       protocolID: [0, 'token list'],
       keyID: '1',
-      counterparty: identityKey
+      counterparty: 'anyone'
     })
 
     const lockingScript = await pushdrop.lock(
