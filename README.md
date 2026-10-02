@@ -95,4 +95,4 @@ The package does not define `test` or `type-check` scripts. Live payment and red
 
 ## Licence
 
-See [LICENSE](LICENSE) for the MIT licence.
+**MIT licence.** See [LICENSE](LICENSE) for the full terms.
